@@ -21,6 +21,24 @@ Compose construye el backend y la web, pero MongoDB debe estar disponible extern
 
 Para parar los contenedores: `docker compose down`. No añadas `-v` salvo que quieras eliminar los volúmenes persistentes del servicio.
 
+## Vercel (web y API en un mismo proyecto)
+
+El repositorio incluye `vercel.json` para desplegar Astro y Spring Boot como dos servicios del mismo proyecto Vercel. Ambos comparten dominio y despliegue; las rutas `/api`, `/oauth2`, `/userinfo` y `/connect` se envían al servicio de identidad. Vercel Services está en beta y los contenedores se ejecutan con límites de Vercel Functions.
+
+1. En Vercel, configura el **Root Directory** como `.` (raíz del repositorio), no `web`. Conserva `vercel.json` en esa raíz. El bloque `services` define `web/` como frontend y `backend/` como contenedor Spring.
+2. Configura `PUBLIC_IDENTITY_ISSUER` con el origen HTTPS de producción, por ejemplo `https://id.ejemplo.com`. Configura `KARMANCOS_ISSUER` y `KARMANCOS_PUBLIC_BASE_URL` con exactamente el mismo origen.
+3. Añade las variables del backend descritas arriba, entre ellas `MONGODB_URI`, `SPRING_PROFILES_ACTIVE=prod`, `PORT=8080`, `KARMANCOS_SUBJECT_HMAC_SECRET` y la configuración SMTP.
+4. Añade `KARMANCOS_PRIVATE_KEY_PEM_B64` y `KARMANCOS_PUBLIC_KEY_PEM_B64` como variables secretas de Vercel. Los valores son el contenido de los PEM codificado en Base64 en una sola línea. El backend puede leerlos directamente desde el entorno y no necesita guardar claves en el disco efímero del contenedor.
+5. Vercel reserva `/.well-known` y no permite reescribir esa ruta. El rewrite catch-all la excluye y el frontend genera `/.well-known/openid-configuration` como archivo estático durante el build a partir de `PUBLIC_IDENTITY_ISSUER`. Comprueba que `issuer` coincida exactamente con `KARMANCOS_ISSUER` y que `jwks_uri` apunte a `/oauth2/jwks`.
+6. Despliega y comprueba `/api/health`, `/.well-known/openid-configuration` y el inicio de sesión. MongoDB y SMTP siguen siendo servicios externos; sus credenciales solo deben guardarse como variables secretas.
+
+Para codificar las claves existentes desde PowerShell sin mostrarlas en el chat:
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes('backend/data/keys/oidc-private.pem'))
+[Convert]::ToBase64String([IO.File]::ReadAllBytes('backend/data/keys/oidc-public.pem'))
+```
+
 ## Variables de entorno
 
 | Variable | Uso | Obligatoria |

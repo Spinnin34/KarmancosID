@@ -25,6 +25,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import java.io.IOException;
+import java.io.ByteArrayInputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
@@ -140,6 +141,20 @@ public class SigningKeyConfiguration {
     }
 
     private KeyPair loadProductionKeyPair(Environment environment) throws Exception {
+        String privateKeyB64 = environment.getProperty("KARMANCOS_PRIVATE_KEY_PEM_B64");
+        String publicKeyB64 = environment.getProperty("KARMANCOS_PUBLIC_KEY_PEM_B64");
+        if ((privateKeyB64 == null) != (publicKeyB64 == null)) {
+            throw new IllegalStateException("Both KARMANCOS_PRIVATE_KEY_PEM_B64 and KARMANCOS_PUBLIC_KEY_PEM_B64 are required together.");
+        }
+        if (privateKeyB64 != null && !privateKeyB64.isBlank() && !publicKeyB64.isBlank()) {
+            byte[] privateKey = Base64.getDecoder().decode(privateKeyB64.trim());
+            byte[] publicKey = Base64.getDecoder().decode(publicKeyB64.trim());
+            try (var privateInput = new ByteArrayInputStream(privateKey);
+                 var publicInput = new ByteArrayInputStream(publicKey)) {
+                return readKeyPair(privateInput, publicInput);
+            }
+        }
+
         Path privatePath = Path.of(environment.getRequiredProperty("KARMANCOS_PRIVATE_KEY_PATH"));
         Path publicPath = Path.of(environment.getRequiredProperty("KARMANCOS_PUBLIC_KEY_PATH"));
         return readKeyPair(privatePath, publicPath);
@@ -166,13 +181,15 @@ public class SigningKeyConfiguration {
     }
 
     private KeyPair readKeyPair(Path privatePath, Path publicPath) throws Exception {
-        RSAPrivateKey privateKey;
-        RSAPublicKey publicKey;
         try (var privateInput = Files.newInputStream(privatePath);
              var publicInput = Files.newInputStream(publicPath)) {
-            privateKey = RsaKeyConverters.pkcs8().convert(privateInput);
-            publicKey = RsaKeyConverters.x509().convert(publicInput);
+            return readKeyPair(privateInput, publicInput);
         }
+    }
+
+    private KeyPair readKeyPair(java.io.InputStream privateInput, java.io.InputStream publicInput) throws Exception {
+        RSAPrivateKey privateKey = RsaKeyConverters.pkcs8().convert(privateInput);
+        RSAPublicKey publicKey = RsaKeyConverters.x509().convert(publicInput);
         if (privateKey == null || publicKey == null) {
             throw new IllegalStateException("Unable to parse the configured RSA OIDC signing keys.");
         }
