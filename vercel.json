@@ -2,10 +2,12 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "services": {
     "frontend": {
-      "root": "web/"
+      "root": "web/",
+      "framework": "astro"
     },
     "identity": {
       "root": "backend/",
+      "framework": "container",
       "runtime": "container",
       "entrypoint": "Dockerfile"
     }
