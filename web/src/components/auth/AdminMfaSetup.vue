@@ -3,7 +3,7 @@ import { onMounted, ref } from "vue";
 import Button from "@/components/ui/Button.vue";
 import Collapsible from "@/components/ui/Collapsible.vue";
 import InputOTP from "@/components/ui/InputOTP.vue";
-import { identityApi } from "@/lib/identity-api";
+import { IdentityApiError, identityApi } from "@/lib/identity-api";
 
 const secret = ref("");
 const uri = ref("");
@@ -15,22 +15,30 @@ const loading = ref(false);
 const error = ref("");
 const copied = ref(false);
 
+async function loadSetup() {
+  secret.value = "";
+  uri.value = "";
+  qrCode.value = "";
+  qrError.value = "";
+  const data = await identityApi<{ secret: string; uri: string }>("/api/auth/mfa/setup", { cache: "no-store" });
+  secret.value = data.secret;
+  uri.value = data.uri;
+  try {
+    const { default: QRCode } = await import("qrcode");
+    qrCode.value = await QRCode.toDataURL(data.uri, {
+      errorCorrectionLevel: "M",
+      margin: 3,
+      width: 240,
+      color: { dark: "#111827", light: "#ffffff" },
+    });
+  } catch {
+    qrError.value = "No se pudo generar el QR. Puedes añadir la clave de configuración manualmente.";
+  }
+}
+
 onMounted(async () => {
   try {
-    const data = await identityApi<{ secret: string; uri: string }>("/api/auth/mfa/setup", { cache: "no-store" });
-    secret.value = data.secret;
-    uri.value = data.uri;
-    try {
-      const { default: QRCode } = await import("qrcode");
-      qrCode.value = await QRCode.toDataURL(data.uri, {
-        errorCorrectionLevel: "M",
-        margin: 3,
-        width: 240,
-        color: { dark: "#111827", light: "#ffffff" },
-      });
-    } catch {
-      qrError.value = "No se pudo generar el QR. Puedes añadir la clave de configuración manualmente.";
-    }
+    await loadSetup();
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : "No se pudo preparar la configuración.";
   }
@@ -47,7 +55,17 @@ async function verify() {
     recoveryCodes.value = data.recoveryCodes;
     window.sessionStorage.setItem("karmancos-admin-mfa-next", data.next || "/admin");
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : "No se pudo verificar el código.";
+    if (cause instanceof IdentityApiError && cause.status === 410) {
+      code.value = "";
+      try {
+        await loadSetup();
+        error.value = "La configuración anterior caducó. Escanea el QR nuevo e introduce el código que genere.";
+      } catch (refreshCause) {
+        error.value = refreshCause instanceof Error ? refreshCause.message : "No se pudo renovar el QR. Recarga la página para volver a intentarlo.";
+      }
+    } else {
+      error.value = cause instanceof Error ? cause.message : "No se pudo verificar el código.";
+    }
   } finally {
     loading.value = false;
   }
@@ -98,7 +116,7 @@ function continueToAdmin() {
             <p v-else-if="qrError" class="mfa-qr-error" role="status">{{ qrError }}</p>
             <p v-else class="mfa-qr-loading" role="status">Preparando el código QR…</p>
           </div>
-          <p class="mfa-qr-private">El código se genera en esta pantalla; no se envía a Google ni a otro servicio.</p>
+          <p class="mfa-qr-private">El QR se genera en esta pantalla y no se envía a otro servicio. Caduca en 10 minutos; si vence, te mostraremos uno nuevo.</p>
         </section>
 
         <Collapsible

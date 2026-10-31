@@ -40,6 +40,9 @@ test("administrator MFA setup presents one-time recovery codes after TOTP confir
   }));
 
   await page.goto("/configurar-2fa");
+  await expect(page.getByRole("img", { name: "Código QR para añadir Karmancos ID a la aplicación autenticadora" })).toBeVisible();
+  await expect(page.getByText("JBSWY3DPEHPK3PXP")).not.toBeVisible();
+  await page.getByText("Introducir la clave manualmente").first().click();
   await expect(page.getByText("JBSWY3DPEHPK3PXP")).toBeVisible();
   const otpInput = page.getByLabel("Código de seis cifras");
   await otpInput.fill("123456");
@@ -47,6 +50,45 @@ test("administrator MFA setup presents one-time recovery codes after TOTP confir
   await expect(page.getByRole("heading", { name: "Guarda estos códigos" })).toBeVisible();
   await expect(page.getByText("A1B2-C3D4-E5F6-7890")).toBeVisible();
   await expect(page.getByRole("button", { name: "Continuar" })).toBeVisible();
+});
+
+test("an expired administrator MFA setup automatically issues a fresh QR", async ({ page }) => {
+  await page.route("**/api/auth/csrf", (route) => route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    headers: { "Set-Cookie": "XSRF-TOKEN=e2e-token; Path=/; SameSite=Lax" },
+    body: JSON.stringify({ token: "e2e-token" }),
+  }));
+
+  let setupRequests = 0;
+  await page.route("**/api/auth/mfa/setup", (route) => {
+    setupRequests += 1;
+    const secret = setupRequests === 1 ? "JBSWY3DPEHPK3PXP" : "KRSXG5DSNFXGOIDB";
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ secret, uri: `otpauth://totp/Karmancos%20ID:admin?secret=${secret}` }),
+    });
+  });
+  await page.route("**/api/auth/mfa/setup/verify", (route) => route.fulfill({
+    status: 410,
+    contentType: "application/json",
+    body: JSON.stringify({ message: "La configuración ha caducado. Vuelve a iniciar el proceso." }),
+  }));
+
+  await page.goto("/configurar-2fa");
+  const qr = page.getByRole("img", { name: "Código QR para añadir Karmancos ID a la aplicación autenticadora" });
+  await expect(qr).toBeVisible();
+  const otpInput = page.getByLabel("Código de seis cifras");
+  await otpInput.fill("123456");
+  await page.getByRole("button", { name: "Activar verificación en dos pasos" }).click();
+
+  await expect(page.getByText("La configuración anterior caducó. Escanea el QR nuevo e introduce el código que genere.")).toBeVisible();
+  await expect(otpInput).toHaveValue("");
+  await expect(qr).toBeVisible();
+  await page.getByText("Introducir la clave manualmente").first().click();
+  await expect(page.getByText("KRSXG5DSNFXGOIDB")).toBeVisible();
+  expect(setupRequests).toBe(2);
 });
 
 test("developer information continues to expose the OAuth/OIDC integration flow", async ({ page }) => {
