@@ -71,8 +71,11 @@ async function connectStore(): Promise<{ db: Db; collections: Collections }> {
         collections.sessions.createIndex({ email: 1, lastAccessedAt: -1 }, { name: "idx_identity_sessions_email_recent" }),
         collections.authorizations.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: "ttl_oauth_authorizations" }),
         collections.rateLimits.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: "ttl_auth_rate_limits" }),
-        collections.actionTokens.createIndex({ purgeAt: 1 }, { expireAfterSeconds: 0, name: "ttl_account_action_tokens" }),
-        collections.audit.createIndex({ occurredAt: -1 }, { name: "idx_audit_occurred_at" }),
+        // Keep the names used by the previous Spring Data backend. MongoDB
+        // rejects an equivalent index if the same key already exists under
+        // a different name.
+        collections.actionTokens.createIndex({ purgeAt: 1 }, { expireAfterSeconds: 0, name: "purgeAt" }),
+        collections.audit.createIndex({ occurredAt: -1 }, { name: "occurredAt" }),
         collections.applications.createIndex({ submittedAt: -1 }, { name: "idx_applications_submitted_at" }),
         collections.revocations.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: "ttl_oauth_revocations" }),
       ]);

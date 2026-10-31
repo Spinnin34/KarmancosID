@@ -13,3 +13,7 @@
 !.env.example
 *.pem
 *.key
+
+.vercel
+.env*
+!.env.example
