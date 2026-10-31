@@ -10,9 +10,11 @@ Gracias por ayudar a mejorar Karmancos ID. Los cambios de autenticación y autor
 
 ## Preparar el entorno
 
-- Java 21 y Maven para `backend/`.
-- Node.js 22.12+ y npm para `web/`.
+- Node.js 22.12+ y npm para `web/`, donde viven Astro y la API de identidad.
 - Una instancia MongoDB de desarrollo. Nunca uses credenciales o datos reales.
+- Una cuenta SMTP de prueba si vas a cambiar los flujos de verificación o recuperación.
+
+El código Java de `backend/` corresponde al despliegue anterior; la API que se ejecuta en Vercel se mantiene en `web/src/server/identity/`.
 
 ## Flujo de trabajo
 
@@ -22,12 +24,10 @@ Gracias por ayudar a mejorar Karmancos ID. Los cambios de autenticación y autor
 4. Ejecuta las comprobaciones relevantes:
 
    ```bash
-   # En backend/
-   mvn test
-
    # En web/
    npm ci
    npm run build
+   npx tsc --noEmit
 
    # En la raíz
    node --check sdk/index.js

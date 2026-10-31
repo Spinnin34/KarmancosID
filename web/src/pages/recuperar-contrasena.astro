@@ -1,6 +1,8 @@
 ---
 import AuthSurface from "../components/auth/AuthSurface.astro";
 import AccountActionForm from "../components/auth/AccountActionForm.vue";
+
+export const prerender = true;
 ---
 
 <AuthSurface title="Karmancos ID · Recuperar cuenta" eyebrow="Recuperación segura" heading="Recupera tu cuenta" intro="Te enviaremos un enlace temporal si encontramos una cuenta asociada.">

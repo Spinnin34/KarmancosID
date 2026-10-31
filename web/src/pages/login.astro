@@ -1,6 +1,8 @@
 ---
 import AuthSurface from "../components/auth/AuthSurface.astro";
 import LoginForm from "../components/auth/LoginForm.vue";
+
+export const prerender = true;
 ---
 
 <AuthSurface title="Karmancos ID · Iniciar sesión" eyebrow="Acceso a tu cuenta" heading="Vuelve a entrar" intro="Usa tu cuenta Karmancos ID para continuar.">

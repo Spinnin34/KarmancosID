@@ -1,6 +1,8 @@
 ---
 import AuthSurface from "../components/auth/AuthSurface.astro";
 import AccountActionForm from "../components/auth/AccountActionForm.vue";
+
+export const prerender = true;
 ---
 
 <AuthSurface title="Karmancos ID · Verificar correo" eyebrow="Protección de cuenta" heading="Solicita otro enlace" intro="Si la cuenta necesita verificación, enviaremos un nuevo enlace.">

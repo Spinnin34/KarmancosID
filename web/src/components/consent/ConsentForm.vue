@@ -9,6 +9,7 @@ const state = ref(props.state || "");
 const requestedScopes = ref<string[]>(props.requestedScopes || []);
 const clientName = ref("");
 const clientDomain = ref("");
+const csrfToken = ref("");
 const loading = ref(true);
 const error = ref("");
 
@@ -34,11 +35,16 @@ onMounted(async () => {
     return;
   }
   try {
-    const response = await fetch(`/api/public/clients/${encodeURIComponent(clientId.value)}`, { credentials: "same-origin" });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.message || "No se pudo verificar el servicio.");
-    clientName.value = data.name;
-    clientDomain.value = data.domain;
+    const [clientResponse, csrfResponse] = await Promise.all([
+      fetch(`/api/public/clients/${encodeURIComponent(clientId.value)}`, { credentials: "same-origin" }),
+      fetch("/api/auth/csrf", { credentials: "same-origin" })
+    ]);
+    const [client, csrf] = await Promise.all([clientResponse.json(), csrfResponse.json()]);
+    if (!clientResponse.ok) throw new Error(client.message || "No se pudo verificar el servicio.");
+    if (!csrfResponse.ok || typeof csrf.token !== "string") throw new Error("No se pudo preparar una solicitud segura.");
+    clientName.value = client.name;
+    clientDomain.value = client.domain;
+    csrfToken.value = csrf.token;
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : "No se pudo verificar el servicio.";
   } finally {
@@ -67,6 +73,7 @@ onMounted(async () => {
         <span>{{ clientDomain || 'Servicio registrado en Karmancos ID' }}</span>
       </div>
       <form method="post" action="/oauth2/authorize">
+        <input type="hidden" name="_csrf" :value="csrfToken" />
         <input type="hidden" name="client_id" :value="clientId" />
         <input type="hidden" name="state" :value="state" />
         <fieldset class="consent-scopes">

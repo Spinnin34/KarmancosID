@@ -13,43 +13,33 @@
 - Verificación de correo y recuperación de contraseña con tokens de un solo uso.
 - Gestión y revocación de sesiones, autorizaciones y aplicaciones conectadas.
 - Formularios de solicitud de integración y revisión desde el panel admin.
-- Caddy para servir la web, aplicar cabeceras de seguridad y enrutar al backend.
+- API Node.js integrada en Astro y desplegable como funciones de Vercel.
 
 ## Requisitos
 
 - Git.
-- Java 21 y Maven 3.9+ para desarrollar el backend fuera de Docker.
-- Node.js 22.12+ y npm para la web.
-- MongoDB accesible para el backend.
-- Docker Compose para ejecutar el stack empaquetado. MongoDB es externo al `compose.yaml` actual.
+- Node.js 22.12+ y npm.
+- MongoDB accesible desde la API.
+- Un servicio SMTP para entregar los correos de verificación y recuperación.
 
 ## Empezar en local
 
-1. Clona el repositorio y crea tu configuración local a partir de la plantilla:
+1. Clona el repositorio, copia la plantilla local y configura una base MongoDB y claves de desarrollo:
 
-   ```bash
+   ```powershell
    git clone <URL-DEL-REPOSITORIO>
    cd KarmancosID
-   cp .env.example .env
+   Copy-Item web/.env.example web/.env
+   cd web
+   npm ci
+   npm run dev
    ```
 
-   En PowerShell, usa `Copy-Item .env.example .env`. Completa `MONGODB_URI` con una base **de desarrollo**, además del correo y la contraseña de bootstrap del administrador. La contraseña inicial debe tener al menos 16 caracteres. No uses una base de producción para probar.
+   Completa `web/.env` con valores de desarrollo. Usa una base MongoDB aislada, claves de firma propias y credenciales SMTP de prueba; nunca apuntes a producción.
 
-2. Inicia el stack:
+2. Abre la URL que muestre Astro, normalmente [http://localhost:4321](http://localhost:4321), crea una cuenta y entra en `/admin` si ya configuraste un administrador inicial.
 
-   ```bash
-   docker compose up --build
-   ```
-
-3. Abre [http://localhost](http://localhost), crea una cuenta en `/registro` y entra en `/admin` con el administrador de bootstrap.
-
-El servidor requiere una instancia MongoDB que no forma parte de Docker Compose. Si los contenedores arrancan antes de completar las variables del administrador, recrea solo el servicio de identidad después de corregir la configuración:
-
-```bash
-docker compose up -d --force-recreate identity
-```
-
-Consulta [Despliegue](docs/DEPLOYMENT.md) para desarrollo separado, variables, salud y configuración de producción.
+Consulta [Despliegue](docs/DEPLOYMENT.md) para las variables necesarias y la configuración exacta de Vercel.
 
 ## Integrar una aplicación
 
@@ -67,7 +57,7 @@ Usa HTTPS fuera de localhost. Los callbacks se comparan exactamente; no registre
 El documento de descubrimiento está disponible en:
 
 ```text
-http://localhost/.well-known/openid-configuration
+http://localhost:4321/.well-known/openid-configuration
 ```
 
 En producción, reemplaza el origen por el `issuer` HTTPS configurado. Para sitios web, añade también el origen exacto en «Orígenes web autorizados» para permitir el intercambio del código desde el navegador. En aplicaciones móviles y servidores, utiliza una biblioteca OIDC mantenida para tu plataforma.
@@ -95,40 +85,25 @@ console.log(session.user.sub);
 
 ## Desarrollo por separado
 
-La web reenvía las rutas `/api`, `/oauth2`, `/.well-known`, `/userinfo` y `/connect` al backend configurado mediante `IDENTITY_API_TARGET` (por defecto `http://localhost:8080`). Con MongoDB accesible y el backend iniciado, ejecuta:
-
-```bash
-# Terminal 1
-cd backend
-mvn spring-boot:run
-
-# Terminal 2
-cd web
-npm ci
-npm run dev
-```
-
-Astro suele mostrar la URL local, normalmente `http://localhost:4321`. El frontend puede mostrar sus páginas aunque el backend esté apagado, pero no funcionarán el login, registro, administración ni los endpoints OIDC.
+La API vive en `web/src/server/identity/` y Astro la sirve localmente. No hace falta arrancar otro proceso de backend. `IDENTITY_API_TARGET` solo activa un proxy opcional a otro servidor para compatibilidad durante el desarrollo.
 
 ## Verificación
 
-```bash
-cd backend && mvn test
-cd ../web && npm run build
-node --check ../sdk/index.js
+```powershell
+cd web
+npm run build
+npx tsc --noEmit
 ```
-
-En PowerShell ejecuta cada comando desde su carpeta correspondiente si `&&` no está disponible en tu versión.
 
 ## Seguridad y preparación para producción
 
-El proyecto incorpora PKCE, CSRF para operaciones web, cookies HTTP-only, límites de intentos persistidos en MongoDB, BCrypt, revocación de sesiones y autorizaciones, tokens de correo de un solo uso, CORS por origen aprobado, cabeceras del navegador y claves RSA persistentes. El perfil `prod` exige claves RSA externas, correo SMTP, URL pública HTTPS, cookies seguras y un secreto HMAC estable para los subjects pairwise.
+El proyecto incorpora PKCE, CSRF para operaciones web, cookies HTTP-only, límites de intentos persistidos en MongoDB, BCrypt, revocación de sesiones y autorizaciones, tokens de correo de un solo uso, CORS por origen aprobado, cabeceras del navegador y claves RSA persistentes. En Vercel, MongoDB, SMTP, las claves y el secreto HMAC se configuran como variables de entorno; el backend Java anterior no participa en el despliegue.
 
 Antes de publicar el servicio:
 
 1. Usa una base MongoDB dedicada, con mínimo privilegio, copias de seguridad y restauraciones probadas.
-2. Configura `SPRING_PROFILES_ACTIVE=prod`, `KARMANCOS_ISSUER`, `KARMANCOS_PUBLIC_BASE_URL` y `CADDY_SITE` con HTTPS real.
-3. Carga las claves privada y pública RSA desde almacenamiento protegido. No las subas al repositorio ni las envíes en logs.
+2. Configura `PUBLIC_IDENTITY_ISSUER` con el origen HTTPS de Vercel. `KARMANCOS_ISSUER` y `KARMANCOS_PUBLIC_BASE_URL` pueden usar el mismo origen.
+3. Carga las claves privada y pública RSA en Base64 como secretos de Vercel. No las subas al repositorio ni las envíes en logs.
 4. Genera `KARMANCOS_SUBJECT_HMAC_SECRET` aleatoriamente y consérvalo estable: cambiarlo modifica los `sub` de los usuarios.
 5. Configura y prueba SMTP, monitorización, alertas, rotación planificada y restauración ante incidentes.
 6. Revisa el modelo de privacidad y las obligaciones legales que apliquen a tu despliegue.
@@ -147,10 +122,9 @@ La autenticación multifactor con passkeys o TOTP aún no está implementada. La
 
 | Área | Tecnología |
 | --- | --- |
-| Identidad y API | Java 21, Spring Boot, Spring Security Authorization Server |
-| Persistencia | MongoDB y Spring Data MongoDB |
+| Identidad y API | Node.js, Astro Server Endpoints y Vercel Functions |
+| Persistencia | MongoDB y MongoDB Node.js Driver |
 | Interfaz | Astro, Vue y componentes Balsa UI |
-| Proxy y TLS | Caddy |
 | Integración | OpenID Connect, OAuth 2.0 Authorization Code y PKCE |
 
 ## Licencia

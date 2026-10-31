@@ -1,22 +1,4 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "services": {
-    "frontend": {
-      "root": "web/",
-      "framework": "astro"
-    },
-    "identity": {
-      "root": "backend/",
-      "framework": "container",
-      "runtime": "container",
-      "entrypoint": "Dockerfile"
-    }
-  },
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": { "service": "identity" } },
-    { "source": "/oauth2/(.*)", "destination": { "service": "identity" } },
-    { "source": "/userinfo", "destination": { "service": "identity" } },
-    { "source": "/connect/(.*)", "destination": { "service": "identity" } },
-    { "source": "/:path((?!\\.well-known/).*)", "destination": { "service": "frontend" } }
-  ]
+  "framework": "astro"
 }
