@@ -1,0 +1,9 @@
+{
+  "name": "@karmancosid/web",
+  "version": "0.1.0",
+  "description": "OpenID Connect browser SDK for Karmancos ID",
+  "type": "module",
+  "exports": "./index.js",
+  "files": ["index.js", "README.md"],
+  "engines": { "node": ">=20" }
+}
