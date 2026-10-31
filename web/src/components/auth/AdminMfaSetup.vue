@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import Button from "@/components/ui/Button.vue";
+import Collapsible from "@/components/ui/Collapsible.vue";
 import InputOTP from "@/components/ui/InputOTP.vue";
 import { identityApi } from "@/lib/identity-api";
 
 const secret = ref("");
 const uri = ref("");
+const qrCode = ref("");
+const qrError = ref("");
 const code = ref("");
 const recoveryCodes = ref<string[]>([]);
 const loading = ref(false);
@@ -17,6 +20,17 @@ onMounted(async () => {
     const data = await identityApi<{ secret: string; uri: string }>("/api/auth/mfa/setup", { cache: "no-store" });
     secret.value = data.secret;
     uri.value = data.uri;
+    try {
+      const { default: QRCode } = await import("qrcode");
+      qrCode.value = await QRCode.toDataURL(data.uri, {
+        errorCorrectionLevel: "M",
+        margin: 3,
+        width: 240,
+        color: { dark: "#111827", light: "#ffffff" },
+      });
+    } catch {
+      qrError.value = "No se pudo generar el QR. Puedes añadir la clave de configuración manualmente.";
+    }
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : "No se pudo preparar la configuración.";
   }
@@ -63,10 +77,51 @@ function continueToAdmin() {
         <p>La verificación en dos pasos es obligatoria para las cuentas administradoras. Añade Karmancos ID a tu aplicación autenticadora.</p>
       </div>
 
-      <div v-if="secret" class="mfa-secret-block">
-        <span class="mfa-secret-label">Clave de configuración</span>
-        <code>{{ secret }}</code>
-        <a class="mfa-uri-link" :href="uri">Abrir en una aplicación compatible</a>
+      <div v-if="secret" class="mfa-setup-methods">
+        <section class="mfa-qr-option" aria-labelledby="mfa-qr-title">
+          <div class="mfa-option-heading">
+            <span class="mfa-option-number" aria-hidden="true">1</span>
+            <div>
+              <h3 id="mfa-qr-title">Escanea el código QR</h3>
+              <p>Abre tu aplicación autenticadora, pulsa añadir cuenta y escanea este código.</p>
+            </div>
+          </div>
+          <div class="mfa-qr-frame" aria-live="polite">
+            <img
+              v-if="qrCode"
+              class="mfa-qr-image"
+              :src="qrCode"
+              alt="Código QR para añadir Karmancos ID a la aplicación autenticadora"
+              width="240"
+              height="240"
+            />
+            <p v-else-if="qrError" class="mfa-qr-error" role="status">{{ qrError }}</p>
+            <p v-else class="mfa-qr-loading" role="status">Preparando el código QR…</p>
+          </div>
+          <p class="mfa-qr-private">El código se genera en esta pantalla; no se envía a Google ni a otro servicio.</p>
+        </section>
+
+        <Collapsible
+          id="mfa-manual-setup"
+          class="mfa-manual-option"
+          title="Introducir la clave manualmente"
+          variant="surface"
+          size="md"
+        >
+          <template #trigger>
+            <span class="mfa-option-number" aria-hidden="true">2</span>
+            <span class="mfa-manual-heading">
+              <strong>Introducir la clave manualmente</strong>
+              <small>Úsala si no puedes escanear el QR o estás configurando el móvil donde ves esta página.</small>
+            </span>
+          </template>
+          <div class="mfa-secret-block">
+            <span class="mfa-secret-label">Clave de configuración</span>
+            <code>{{ secret }}</code>
+            <p class="mfa-manual-instruction">En la aplicación, elige «Introducir una clave de configuración» y selecciona «Basada en tiempo».</p>
+            <a class="mfa-uri-link" :href="uri">Abrir en una aplicación compatible</a>
+          </div>
+        </Collapsible>
       </div>
 
       <form class="auth-form" @submit.prevent="verify">

@@ -562,6 +562,30 @@
         "src/components/ui/classes.ts",
         "src/components/ui/form.ts"
       ]
+    },
+    "@balsa/collapsible": {
+      "registry": "@balsa/collapsible",
+      "namespace": "@balsa",
+      "installedVersion": "0.1.0",
+      "contractVersion": "0.1.0",
+      "designSystemVersion": "0.8.1",
+      "originalSourceHash": "sha256-a1af92b63704c0eca9e1fb57c1ae3647dc15806f2679a059791bd37ad5227b11",
+      "installedSourceHash": "sha256-a1af92b63704c0eca9e1fb57c1ae3647dc15806f2679a059791bd37ad5227b11",
+      "dependencies": [
+        "vue",
+        "@lucide/vue",
+        "tailwind-merge"
+      ],
+      "registryDependencies": [
+        "@balsa/icon",
+        "@balsa/balsa-theme"
+      ],
+      "targetPath": "src/components/ui/Collapsible.vue",
+      "files": [
+        "src/components/ui/Collapsible.vue",
+        "src/components/ui/classes.ts",
+        "src/components/ui/form.ts"
+      ]
     }
   }
 }
