@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { ref } from "vue";
 import { ArrowRight } from "@lucide/vue";
 import Button from "@/components/ui/Button.vue";
 import Input from "@/components/ui/Input.vue";
+import { identityApi } from "@/lib/identity-api";
 
 const username = ref("");
 const firstName = ref("");
@@ -13,31 +14,6 @@ const password = ref("");
 const confirmation = ref("");
 const loading = ref(false);
 const message = ref("");
-const csrfToken = ref("");
-let csrfRequest: Promise<void> | null = null;
-
-async function refreshCsrf() {
-  if (csrfRequest) return csrfRequest;
-  csrfRequest = (async () => {
-    const response = await fetch("/api/auth/csrf", { credentials: "same-origin" });
-    if (!response.ok) throw new Error("No se pudo preparar la conexión segura.");
-    const data = await response.json();
-    if (typeof data.token !== "string" || !data.token) throw new Error("No se recibió el token de seguridad.");
-    csrfToken.value = data.token;
-  })();
-  try {
-    await csrfRequest;
-  } finally {
-    csrfRequest = null;
-  }
-}
-
-onMounted(() => {
-  refreshCsrf().catch(() => {
-    message.value = "No se pudo preparar la conexión segura. Recarga la página e inténtalo otra vez.";
-  });
-});
-
 async function submit() {
   message.value = "";
 
@@ -65,28 +41,20 @@ async function submit() {
 
   loading.value = true;
   try {
-    if (!csrfToken.value) await refreshCsrf();
-    const response = await fetch("/api/auth/register", {
+    await identityApi("/api/auth/register", {
       method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json", "X-XSRF-TOKEN": csrfToken.value },
-      body: JSON.stringify({
+      body: {
         username: username.value.trim().toLowerCase(),
         firstName: firstName.value.trim(),
         lastName: lastName.value.trim(),
         secondLastName: secondLastName.value.trim(),
         email: email.value.trim().toLowerCase(),
         password: password.value
-      })
+      }
     });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      message.value = data.message || "No se pudo crear la cuenta con esos datos.";
-      return;
-    }
     window.location.assign("/login?created=1");
-  } catch {
-    message.value = "No se pudo conectar con Karmancos ID. Comprueba que el servicio esté disponible.";
+  } catch (cause) {
+    message.value = cause instanceof Error ? cause.message : "No se pudo crear la cuenta con esos datos.";
   } finally {
     loading.value = false;
   }
@@ -95,6 +63,10 @@ async function submit() {
 
 <template>
   <form class="auth-form register-form" novalidate @submit.prevent="submit">
+    <div class="form-heading">
+      <h2>Empieza aquí</h2>
+      <p>Crea una cuenta para usarla en todos tus sitios conectados.</p>
+    </div>
     <div class="register-fields">
       <div class="register-field">
         <Input
@@ -154,6 +126,7 @@ async function submit() {
           maxlength="320"
           required
         />
+        <p class="field-note">El correo se guarda como dato de cuenta. No se verifica ni se usa para recuperar acceso.</p>
       </div>
       <div class="register-field">
         <Input

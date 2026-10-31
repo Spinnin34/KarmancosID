@@ -18,3 +18,5 @@ const session = await identity.signIn(); // Authorization Code + PKCE; el token 
 ```
 
 La aplicación debe llamar a `completePopup()` desde el callback registrado. Si se elige `signIn({ mode: "redirect" })`, la ruta de retorno llama a `completeRedirect()` y conserva la transacción en `sessionStorage`. No se guardan tokens en almacenamiento persistente y el SDK no usa secretos de cliente.
+
+El scope `email` devuelve el correo como dato de perfil. Karmancos ID no envía correo ni lo verifica automáticamente; trata `email_verified` como `false` salvo que el proveedor lo marque explícitamente como verificado.

@@ -3,11 +3,13 @@ import sharp, { type Metadata, type Sharp } from "sharp";
 import { randomUUID } from "node:crypto";
 import { getStore } from "./storage";
 import { addSessionCookies, clearAuthCookies, loadSession, requireAuthenticated, requireCsrf, requireAdmin } from "./session";
-import { consumeRateLimit, adminUserResponse, displayName, logAudit, pictureUrl, rawPicture, removeGrantForClientAndPrincipal, removeGrantsForClient, removeGrantsForPrincipal, updateUserIdentity, userResponse } from "./common";
+import { removeGrantForClientAndPrincipal, removeGrantsForClient, removeGrantsForPrincipal } from "./client-repository";
+import { consumeRateLimit, logAudit } from "./operations";
+import { adminUserResponse, pictureUrl, updateUserIdentity } from "./user-repository";
 import { empty, json, readJson, requireString } from "./http";
-import { normalizeEmail, normalizeIdentifier, randomToken, sessionReference, validateIdentity, validateRedirectUris, validateOrigins } from "./security";
-import { HttpError, type IdentitySession, type IdentityUser, type OAuthClient } from "./types";
-import { sendActionEmail } from "./email";
+import { normalizeEmail, randomToken, sessionReference, validateIdentity, validateRedirectUris, validateOrigins } from "./security";
+import { HttpError, type IdentityUser, type OAuthClient } from "./types";
+import { adminRecoveryEndpoint } from "./account-recovery";
 
 export async function accountEndpoint(request: Request, path: string): Promise<Response | null> {
   const method = request.method.toUpperCase();
@@ -27,7 +29,6 @@ export async function accountEndpoint(request: Request, path: string): Promise<R
       lastName: String(input.lastName), secondLastName: typeof input.secondLastName === "string" ? input.secondLastName : "",
     });
     if (!updated) throw new HttpError(404, "No se encontró esa cuenta.");
-    if (previousEmail !== normalizeEmail(updated.email)) await sendActionEmail(updated, "verify");
     await revokeIdentityAccess(previousEmail);
     await logAudit(previousEmail, "account.profile_changed", updated.email);
     const headers = new Headers();
@@ -158,6 +159,10 @@ export async function accountEndpoint(request: Request, path: string): Promise<R
     return json({ message: "Se cerraron las otras sesiones." });
   }
 
+  if (path.startsWith("/api/admin/users/") && path.endsWith("/recovery-code")) {
+    const response = await adminRecoveryEndpoint(request, path, context);
+    if (response) return response;
+  }
   if (path.startsWith("/api/admin/")) return adminEndpoint(request, path, context);
   return null;
 }
@@ -200,7 +205,10 @@ async function adminEndpoint(request: Request, path: string, context: Awaited<Re
     const name = requireString(input.name, "name", 100).trim();
     const redirects = validateRedirectUris(input.redirectUris);
     const origins = validateOrigins(input.allowedOrigins);
-    const postLogout = input.postLogoutRedirectUris == null ? [] : validateRedirectUris(input.postLogoutRedirectUris);
+    const postLogout = input.postLogoutRedirectUris == null
+      || (Array.isArray(input.postLogoutRedirectUris) && input.postLogoutRedirectUris.length === 0)
+      ? []
+      : validateRedirectUris(input.postLogoutRedirectUris);
     const clientType = typeof input.clientType === "string" ? input.clientType.toLowerCase() : "confidential";
     if (!new Set(["public", "confidential"]).has(clientType)) throw new HttpError(400, "Elige un cliente público o confidencial.");
     const clientId = `kmc_${randomToken(18)}`;
@@ -325,7 +333,7 @@ async function adminEndpoint(request: Request, path: string, context: Awaited<Re
       if (!exists) throw new HttpError(404, "No se encontró la solicitud.");
       throw new HttpError(409, "La solicitud ya se revisó.");
     }
-    await logAudit(context!.user.email, `client.application_${status.toLowerCase()}`, application.name);
+    await logAudit(context!.user.email, `client.application_${status.toLowerCase()}`, application.name ?? "Solicitud de integración");
     return json(applicationView(application));
   }
 

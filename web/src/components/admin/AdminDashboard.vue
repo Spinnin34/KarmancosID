@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import Avatar from "@/components/ui/Avatar.vue";
 import Button from "@/components/ui/Button.vue";
 import Badge from "@/components/ui/Badge.vue";
 import Input from "@/components/ui/Input.vue";
@@ -10,6 +9,9 @@ import Select from "@/components/ui/Select.vue";
 import Table from "@/components/ui/Table.vue";
 import Textarea from "@/components/ui/Textarea.vue";
 import ActivityTimelineCard from "@/components/compositions/ActivityTimelineCard.vue";
+import AdminUsersPanel from "./AdminUsersPanel.vue";
+import type { AccountFilter, AdminUser } from "./contracts";
+import { identityApi, IdentityApiError } from "@/lib/identity-api";
 
 type SectionId = "overview" | "applications" | "clients" | "users" | "sessions" | "activity";
 type Overview = { accounts: number; clients: number; activeSessions: number };
@@ -17,7 +19,7 @@ type Client = {
   id: string; clientId: string; name: string; clientType: "public" | "confidential";
   redirectUris: string[]; allowedOrigins: string[]; postLogoutRedirectUris: string[]; scopes: string[]; createdAt: string;
 };
-type User = { id: string; email: string; username: string; firstName: string; lastName: string; secondLastName: string; displayName: string; role: "USER" | "ADMIN"; active: boolean; createdAt: string; picture: string | null };
+type User = AdminUser;
 type Session = { reference: string; email: string | null; createdAt: string; lastAccessedAt: string };
 type Activity = { id: string; actor: string; action: string; subject: string; occurredAt: string };
 type Application = {
@@ -35,13 +37,6 @@ const sections: { id: SectionId; title: string }[] = [
   { id: "sessions", title: "Sesiones" },
   { id: "activity", title: "Actividad" }
 ];
-const accountFilters = [
-  { id: "all", label: "Todas" },
-  { id: "active", label: "Activas" },
-  { id: "blocked", label: "Bloqueadas" },
-  { id: "admin", label: "Administradores" }
-] as const;
-
 const activeSection = ref<SectionId>("overview");
 const loading = ref(true);
 const error = ref("");
@@ -52,10 +47,9 @@ const users = ref<User[]>([]);
 const sessions = ref<Session[]>([]);
 const activity = ref<Activity[]>([]);
 const currentUser = ref<CurrentUser | null>(null);
-const csrfToken = ref("");
 const creatingClient = ref(false);
 const accountQuery = ref("");
-const accountFilter = ref<"all" | "active" | "blocked" | "admin">("all");
+const accountFilter = ref<AccountFilter>("all");
 const editingUser = ref<User | null>(null);
 const userDialogOpen = ref(false);
 const savingUser = ref(false);
@@ -85,18 +79,6 @@ const timelineEvents = computed(() => activity.value.map((event) => ({
   target: event.subject,
   time: relativeTime(event.occurredAt)
 })));
-const filteredUsers = computed(() => {
-  const query = accountQuery.value.trim().toLocaleLowerCase("es");
-  return users.value.filter((user) => {
-    const matchesQuery = !query || [user.displayName, user.username, user.email].some((value) => value.toLocaleLowerCase("es").includes(query));
-    const matchesFilter = accountFilter.value === "all"
-      || (accountFilter.value === "active" && user.active)
-      || (accountFilter.value === "blocked" && !user.active)
-      || (accountFilter.value === "admin" && user.role === "ADMIN");
-    return matchesQuery && matchesFilter;
-  });
-});
-
 function focusClientName() {
   navigateSection("clients");
   document.getElementById("client-name")?.focus();
@@ -126,28 +108,15 @@ function scrollAdminToTop() {
   });
 }
 
-async function refreshCsrf() {
-  const response = await fetch("/api/auth/csrf", { credentials: "same-origin" });
-  const data = await response.json();
-  csrfToken.value = data.token;
-}
-
 async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const method = options.method ?? "GET";
-  const headers = new Headers(options.headers);
-  if (method !== "GET" && method !== "HEAD") {
-    if (!csrfToken.value) await refreshCsrf();
-    headers.set("X-XSRF-TOKEN", csrfToken.value);
+  try {
+    return await identityApi<T>(path, options);
+  } catch (cause) {
+    if (cause instanceof IdentityApiError && cause.status === 401) {
+      window.location.assign("/login");
+    }
+    throw cause;
   }
-  const response = await fetch(path, { ...options, method, headers, credentials: "same-origin" });
-  const raw = await response.text();
-  const data = raw ? JSON.parse(raw) : null;
-  if (response.status === 401) {
-    window.location.assign("/login");
-    throw new Error("Inicia sesión para continuar.");
-  }
-  if (!response.ok) throw new Error(data?.message || "No se pudo completar la solicitud.");
-  return data as T;
 }
 
 async function loadDashboard() {
@@ -352,10 +321,6 @@ function formatDate(value: string) {
   return new Intl.DateTimeFormat("es-ES", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }
 
-function userInitials(value: string) {
-  return value.trim().split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toLocaleUpperCase("es-ES")).join("") || "?";
-}
-
 function relativeTime(value: string) {
   const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
   if (seconds < 60) return "ahora";
@@ -368,7 +333,7 @@ onMounted(() => {
   syncSectionFromLocation();
   window.addEventListener("popstate", syncSectionFromLocation);
   window.addEventListener("hashchange", syncSectionFromLocation);
-  refreshCsrf().then(loadDashboard).catch(() => {
+  loadDashboard().catch(() => {
     error.value = "No se pudo conectar con el servicio de identidad.";
     loading.value = false;
   });
@@ -523,32 +488,16 @@ onBeforeUnmount(() => {
             </form>
           </section>
 
-          <section v-else-if="activeSection === 'users'" class="admin-section">
-            <div class="admin-section-heading"><div><h2>Cuentas de Karmancos ID</h2><p>Edita perfiles, administra roles y controla el acceso. Los cambios de perfil revocan sesiones y autorizaciones.</p></div><Badge variant="soft" color="info">{{ filteredUsers.length }} cuentas</Badge></div>
-            <div class="admin-user-tools">
-              <Input id="account-search" v-model="accountQuery" label="Buscar cuenta" placeholder="Nombre, usuario o correo" />
-              <div class="account-filter-list" role="group" aria-label="Filtrar cuentas">
-                <button v-for="filter in accountFilters" :key="filter.id" type="button" class="account-filter" :aria-pressed="accountFilter === filter.id" @click="accountFilter = filter.id">{{ filter.label }}</button>
-              </div>
-            </div>
-            <div v-if="users.length" class="table-wrap">
-              <Table caption="Cuentas de Karmancos ID" variant="surface" density="compact" :column-count="6" hover>
-                <template #header><thead><tr><th scope="col">Cuenta</th><th scope="col">Acceso</th><th scope="col">Rol</th><th scope="col">Alta</th><th scope="col">Perfil</th><th scope="col">Acciones</th></tr></thead></template>
-                <tbody>
-                  <tr v-for="user in filteredUsers" :key="user.id">
-                    <th scope="row"><div class="admin-user-identity"><Avatar :src="user.picture || undefined" :label="`Foto de perfil de ${user.displayName}`" :fallback="userInitials(user.displayName)" size="sm" shape="circle" /><div class="table-cell-main"><strong>{{ user.displayName }}</strong><small>@{{ user.username }} · {{ user.email }}</small></div></div></th>
-                    <td><Badge variant="soft" :color="user.active ? 'success' : 'destructive'">{{ user.active ? 'Activa' : 'Bloqueada' }}</Badge></td>
-                    <td><Badge variant="outline" color="secondary">{{ user.role === 'ADMIN' ? 'Admin' : 'Usuario' }}</Badge></td>
-                    <td>{{ formatDate(user.createdAt) }}</td>
-                    <td><Button variant="outline" size="sm" type="button" :disabled="user.email === currentUser?.email" @click="openUserEditor(user)">{{ user.email === currentUser?.email ? 'Mi cuenta' : 'Editar' }}</Button></td>
-                    <td><div class="table-actions"><Button variant="outline" :color="user.active ? 'destructive' : 'primary'" size="sm" type="button" :disabled="user.email === currentUser?.email" @click="updateUser(user, { active: !user.active })">{{ user.active ? 'Bloquear' : 'Reactivar' }}</Button><Button v-if="user.role === 'USER'" variant="glass" color="secondary" size="sm" type="button" @click="updateUser(user, { role: 'ADMIN' })">Hacer admin</Button><Button v-else variant="glass" color="secondary" size="sm" type="button" :disabled="user.email === currentUser?.email" @click="updateUser(user, { role: 'USER' })">Quitar admin</Button></div></td>
-                  </tr>
-                </tbody>
-              </Table>
-              <div v-if="filteredUsers.length === 0" class="empty-state">No hay cuentas que coincidan con esa búsqueda y ese filtro.</div>
-            </div>
-            <div v-else class="empty-state">No hay cuentas todavía.</div>
-          </section>
+          <AdminUsersPanel
+            v-else-if="activeSection === 'users'"
+            :users="users"
+            :current-user-id="currentUser?.id ?? null"
+            :current-user-email="currentUser?.email ?? null"
+            v-model:query="accountQuery"
+            v-model:filter="accountFilter"
+            @edit="openUserEditor"
+            @access="updateUser"
+          />
 
           <section v-else-if="activeSection === 'sessions'" class="admin-section">
             <div class="admin-section-heading"><div><h2>Sesiones activas</h2><p>Cierra sesiones que ya no deban tener acceso a Karmancos ID.</p></div></div>

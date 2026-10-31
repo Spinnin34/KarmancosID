@@ -100,6 +100,13 @@ export function addSessionCookies(headers: Headers, context: SessionContext) {
 }
 
 export function requireAuthenticated(context: SessionContext | null): asserts context is SessionContext & { user: IdentityUser } {
+  requirePasswordAuthenticated(context);
+  if (context.user.role === "ADMIN" && !context.session.mfaVerifiedAt) {
+    throw new HttpError(403, "Completa la verificación en dos pasos para continuar.");
+  }
+}
+
+export function requirePasswordAuthenticated(context: SessionContext | null): asserts context is SessionContext & { user: IdentityUser } {
   if (!context?.user) throw new HttpError(401, "Inicia sesión para continuar.");
 }
 
@@ -126,7 +133,7 @@ export function requireCsrf(request: Request, context: SessionContext | null, su
   }
 }
 
-export async function rotateSession(request: Request, context: SessionContext, user: IdentityUser) {
+export async function rotateSession(request: Request, context: SessionContext, user: IdentityUser, options: { mfaVerifiedAt?: Date } = {}) {
   const { collections } = await getStore();
   const prior = context.session;
   const now = new Date();
@@ -140,6 +147,7 @@ export async function rotateSession(request: Request, context: SessionContext, u
     expiresAt: new Date(now.getTime() + SESSION_SECONDS * 1000),
     userAgent: request.headers.get("user-agent")?.slice(0, 512),
     ...(prior.requestedAuthorization ? { requestedAuthorization: prior.requestedAuthorization } : {}),
+    ...(options.mfaVerifiedAt ? { mfaVerifiedAt: options.mfaVerifiedAt } : {}),
   };
   await collections.sessions.insertOne(next);
   await collections.sessions.deleteOne({ _id: prior._id });

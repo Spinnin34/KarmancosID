@@ -5,7 +5,7 @@ import LoginForm from "../components/auth/LoginForm.vue";
 export const prerender = true;
 ---
 
-<AuthSurface title="Karmancos ID · Acceso" eyebrow="Acceso a tu cuenta" heading="Vuelve a entrar" intro="Usa tu cuenta Karmancos ID para continuar.">
+<AuthSurface title="Karmancos ID · Acceso">
   <LoginForm client:load />
   <p class="auth-switch">¿Aún no tienes cuenta? <a href="/registro">Crear cuenta</a></p>
   <p class="auth-switch"><a href="/desarrolladores">¿Quieres conectar una aplicación?</a></p>

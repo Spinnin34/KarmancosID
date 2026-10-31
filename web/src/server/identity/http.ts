@@ -48,7 +48,7 @@ export function clientIp(request: Request): string {
     || "unknown";
 }
 
-export function requireString(value: unknown, field: string, max = 4096): string {
+export function requireString(value: unknown, _field: string, max = 4096): string {
   if (typeof value !== "string" || value.trim().length === 0 || value.length > max) {
     throw new HttpError(400, "Revisa los datos enviados.");
   }

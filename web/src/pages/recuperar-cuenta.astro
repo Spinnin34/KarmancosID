@@ -1,0 +1,11 @@
+---
+import AuthSurface from "../components/auth/AuthSurface.astro";
+import AccountRecoveryForm from "../components/auth/AccountRecoveryForm.vue";
+
+export const prerender = true;
+---
+
+<AuthSurface title="Karmancos ID · Recuperar acceso">
+  <AccountRecoveryForm client:load />
+  <p class="auth-switch"><a href="/login">Volver al inicio de sesión</a></p>
+</AuthSurface>

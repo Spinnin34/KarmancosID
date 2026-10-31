@@ -18,6 +18,10 @@ export interface IdentityUser {
   active: boolean;
   emailVerified: boolean;
   createdAt: Date | string;
+  mfaTotpSecretEncrypted?: string;
+  mfaEnabledAt?: Date;
+  mfaRecoveryCodeHashes?: string[];
+  mfaLastUsedStep?: number;
 }
 
 export interface IdentitySession {
@@ -30,6 +34,9 @@ export interface IdentitySession {
   expiresAt: Date;
   userAgent?: string;
   requestedAuthorization?: AuthorizationRequest;
+  mfaVerifiedAt?: Date;
+  pendingMfaSecretEncrypted?: string;
+  pendingMfaSecretExpiresAt?: Date;
 }
 
 export interface AuthorizationRequest {

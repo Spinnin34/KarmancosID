@@ -7,6 +7,7 @@ import Input from "@/components/ui/Input.vue";
 import Link from "@/components/ui/Link.vue";
 import Tabs from "@/components/ui/Tabs.vue";
 import { AppWindow, Clock3, Monitor, ShieldCheck } from "@lucide/vue";
+import { identityApi, IdentityApiError } from "@/lib/identity-api";
 
 type CurrentUser = {
   id: string;
@@ -27,7 +28,6 @@ type AccountTab = "profile" | "security" | "sessions" | "apps";
 const user = ref<CurrentUser | null>(null);
 const error = ref("");
 const loading = ref(true);
-const csrfToken = ref("");
 const activeTab = ref<AccountTab>("profile");
 const accountNavigationReady = ref(false);
 const sessions = ref<AccountSession[]>([]);
@@ -88,29 +88,15 @@ function syncTabFromLocation() {
   if (tabs.some((tab) => tab.id === requestedTab)) activeTab.value = requestedTab as AccountTab;
 }
 
-async function refreshCsrf() {
-  const response = await fetch("/api/auth/csrf", { credentials: "same-origin" });
-  if (!response.ok) throw new Error("No se pudo preparar una sesión segura.");
-  const data = await response.json();
-  csrfToken.value = data.token;
-}
-
 async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const method = options.method ?? "GET";
-  const headers = new Headers(options.headers);
-  if (method !== "GET" && method !== "HEAD") {
-    if (!csrfToken.value) await refreshCsrf();
-    headers.set("X-XSRF-TOKEN", csrfToken.value);
-  }
-  const response = await fetch(path, { ...options, method, headers, credentials: "same-origin" });
-  const raw = await response.text();
-  const data = raw ? JSON.parse(raw) : null;
-  if (response.status === 401) {
+  try {
+    return await identityApi<T>(path, options);
+  } catch (cause) {
+    if (cause instanceof IdentityApiError && cause.status === 401) {
     window.location.assign("/login");
-    throw new Error("Inicia sesión para continuar.");
+    }
+    throw cause;
   }
-  if (!response.ok) throw new Error(data?.message || "No se pudo completar la solicitud.");
-  return data as T;
 }
 
 async function loadSessions() {
@@ -148,24 +134,17 @@ onMounted(async () => {
   accountNavigationReady.value = true;
   window.addEventListener("popstate", syncTabFromLocation);
   try {
-    const [csrfResponse, userResponse] = await Promise.all([
-      fetch("/api/auth/csrf", { credentials: "same-origin" }),
-      fetch("/api/auth/me", { credentials: "same-origin" })
-    ]);
-    if (userResponse.status === 401) {
-      window.location.assign("/login");
-      return;
-    }
-    if (!csrfResponse.ok || !userResponse.ok) throw new Error("No se pudo cargar tu cuenta.");
-    const csrf = await csrfResponse.json();
-    csrfToken.value = csrf.token;
-    user.value = await userResponse.json();
+    user.value = await identityApi<CurrentUser>("/api/auth/me");
     username.value = user.value?.username ?? "";
     firstName.value = user.value?.firstName ?? "";
     lastName.value = user.value?.lastName ?? "";
     secondLastName.value = user.value?.secondLastName ?? "";
     email.value = user.value?.email ?? "";
   } catch (cause) {
+    if (cause instanceof IdentityApiError && cause.status === 401) {
+      window.location.assign("/login");
+      return;
+    }
     error.value = cause instanceof Error ? cause.message : "No se pudo cargar tu cuenta.";
   } finally {
     loading.value = false;
@@ -388,7 +367,7 @@ function formatDate(value: string) {
               <h2>{{ user.displayName }}</h2>
               <Badge variant="soft" color="success">Cuenta activa</Badge>
             </div>
-            <p>@{{ user.username }} <span aria-hidden="true">·</span> {{ user.email }} <Badge v-if="user.emailVerified" variant="soft" color="success">Correo verificado</Badge><Badge v-else variant="soft" color="warning">Correo pendiente</Badge></p>
+            <p>@{{ user.username }} <span aria-hidden="true">·</span> {{ user.email }} <Badge v-if="user.emailVerified" variant="soft" color="success">Correo verificado</Badge><Badge v-else variant="soft" color="warning">Correo no verificado</Badge></p>
           </div>
         </section>
 

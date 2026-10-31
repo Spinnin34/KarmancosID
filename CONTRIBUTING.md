@@ -1,48 +1,39 @@
 # Contribuir
 
-Gracias por ayudar a mejorar Karmancos ID. Los cambios de autenticación y autorización requieren especial cuidado porque afectan la seguridad de todas las aplicaciones conectadas.
-
-## Antes de empezar
-
-- Abre una incidencia para cambios grandes o incompatibles y explica el problema, el impacto y la solución propuesta.
-- No publiques detalles explotables de vulnerabilidades; sigue el proceso privado de [`SECURITY.md`](SECURITY.md).
-- Comprueba si la modificación afecta el protocolo OIDC, tokens existentes, configuración, privacidad o SDK.
+Los cambios de autenticación, autorización y persistencia afectan a todas las aplicaciones conectadas; incluye pruebas y documentación al modificar esos contratos.
 
 ## Preparar el entorno
 
-- Node.js 22.12+ y npm para `web/`, donde viven Astro y la API de identidad.
-- Una instancia MongoDB de desarrollo. Nunca uses credenciales o datos reales.
-- Una cuenta SMTP de prueba si vas a cambiar los flujos de verificación o recuperación.
+- Node.js 22.12 o posterior y npm para la aplicación Astro/Vercel en `web/`.
+- MongoDB aislado para el desarrollo local. Nunca uses datos reales.
+- Claves de desarrollo para firma OIDC, HMAC y cifrado TOTP.
 
-El código Java de `backend/` corresponde al despliegue anterior; la API que se ejecuta en Vercel se mantiene en `web/src/server/identity/`.
+No hay infraestructura Java ni un sistema de correo. El SDK mantiene compatibilidad en sus exportaciones y flujos OIDC.
 
 ## Flujo de trabajo
 
-1. Crea una rama desde la versión base actual.
-2. Mantén el cambio acotado y añade documentación para las opciones de configuración y los flujos nuevos.
-3. Añade o actualiza pruebas cuando cambie lógica de negocio o seguridad.
-4. Ejecuta las comprobaciones relevantes:
+1. Para cambios grandes o incompatibles, explica el problema y el impacto esperado.
+2. Divide las responsabilidades entre rutas, persistencia, validación y contratos.
+3. Añade o actualiza pruebas para lógica de negocio, seguridad y comportamiento de navegador.
+4. Ejecuta desde `web/`:
 
    ```bash
-   # En web/
    npm ci
+   npm run check
+   npm run lint
+   npm test
    npm run build
-   npx tsc --noEmit
-
-   # En la raíz
-   node --check sdk/index.js
    ```
 
-5. Resume el comportamiento, los cambios de configuración y las comprobaciones en tu pull request.
+   Para cambios en el SDK ejecuta también `node --test sdk/test/*.test.js` desde la raíz.
+5. Resume cambios, configuración y resultados en el pull request.
 
-## Reglas de seguridad
+## Seguridad
 
 - No confirmes `.env`, credenciales, claves privadas, tokens reales, sesiones ni datos personales.
-- No uses correo como identificador OIDC `sub` ni relajes la comparación exacta de callbacks.
-- Mantén PKCE S256 y prueba estados inválidos, expiración, repetición de tokens y orígenes no autorizados.
-- Evita escribir credenciales, códigos OAuth, tokens, cookies o secretos en logs, errores y capturas.
-- Los clientes web y móviles son públicos: no añadas un secreto embebido en código distribuido al usuario.
-
-## Estilo
-
-Respeta la estructura y componentes existentes. La interfaz usa componentes Balsa UI y convenciones de Astro/Vue. Conserva accesibilidad, estados de error claros y traducciones consistentes. Los comentarios y nombres de código siguen el estilo ya presente en el módulo correspondiente.
+- Mantén PKCE S256, validación de `state` y comparación exacta de callbacks.
+- No marques correos como verificados sin comprobarlos.
+- No añadas envío ni recuperación de contraseña por email. La recuperación asistida requiere MFA, caducidad, consumo único y auditoría.
+- No permitas que administración consulte o establezca contraseñas.
+- Evita escribir contraseñas, códigos OAuth, códigos de recuperación, cookies y secretos en logs.
+- Trata las aplicaciones web y móviles como clientes públicos: nunca embebas en ellas un secreto confidencial.

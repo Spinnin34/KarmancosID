@@ -1,10 +1,12 @@
 import { createHash } from "node:crypto";
 import { randomToken, sha256, getIssuer, signAccessToken, signIdToken, signingJwks, verifyAccessToken, normalizeEmail, secureEqual } from "./security";
 import { getStore } from "./storage";
-import { addSessionCookies, clearAuthCookies, loadSession, requireCsrf, saveSession } from "./session";
-import { compareClientSecret, consentId, getClientByClientId, logAudit, pictureUrl } from "./common";
+import { addSessionCookies, clearAuthCookies, loadSession, requireAuthenticated, requireCsrf, saveSession } from "./session";
+import { compareClientSecret, consentId, getClientByClientId } from "./client-repository";
+import { logAudit } from "./operations";
+import { pictureUrl } from "./user-repository";
 import { empty, json, readForm } from "./http";
-import { HttpError, type AuthorizationRequest, type IdentitySession, type OAuthClient } from "./types";
+import { HttpError, type AuthorizationRequest, type IdentityUser, type OAuthClient } from "./types";
 
 const AUTH_CODE_SECONDS = 5 * 60;
 const ACCESS_TOKEN_SECONDS = 5 * 60;
@@ -63,7 +65,7 @@ async function authorize(request: Request): Promise<Response> {
   session.session.requestedAuthorization = pending;
 
   const prompt = (params.get("prompt") || "").split(/\s+/).filter(Boolean);
-  if (!session.user) {
+  if (!session.user || (session.user.role === "ADMIN" && !session.session.mfaVerifiedAt)) {
     if (prompt.includes("none")) return oauthRedirectError(redirectUri, "login_required", state);
     await saveSession(session);
     const headers = new Headers();
@@ -95,6 +97,7 @@ async function authorize(request: Request): Promise<Response> {
 async function acceptConsent(request: Request): Promise<Response> {
   const session = await loadSession(request);
   if (!session?.user) return localError("login_required", "Inicia sesión para autorizar el servicio.", 401);
+  requireAuthenticated(session);
   const form = await readForm(request);
   requireCsrf(request, session, form.get("_csrf") || "");
   const pending = session.session.requestedAuthorization;
@@ -222,7 +225,7 @@ async function refreshAccessToken(form: URLSearchParams, client: OAuthClient, co
   return createTokenResponse(user, client, scopes, undefined, cors);
 }
 
-async function createTokenResponse(user: NonNullable<Awaited<ReturnType<typeof getUser>>>, client: OAuthClient, scopes: string[], nonce: string | undefined, cors: HeadersInit) {
+async function createTokenResponse(user: IdentityUser, client: OAuthClient, scopes: string[], nonce: string | undefined, cors: HeadersInit) {
   const accessToken = await signAccessToken(user, client, scopes);
   const now = new Date();
   const accessClaims = await verifyAccessToken(accessToken);
@@ -245,11 +248,6 @@ async function createTokenResponse(user: NonNullable<Awaited<ReturnType<typeof g
     payload.refresh_token = refreshToken;
   }
   return oauthJson(payload, 200, cors);
-}
-
-async function getUser(id: string) {
-  const { collections } = await getStore();
-  return collections.users.findOne({ _id: id, active: true });
 }
 
 async function userinfo(request: Request) {

@@ -1,101 +1,85 @@
-# Despliegue y configuración
+# Despliegue en Vercel
 
-## Arquitectura en Vercel
+## Arquitectura y configuración
 
-La web Astro y la API de identidad viven en `web/`. El adaptador oficial de Astro convierte las rutas de autenticación y OpenID Connect en funciones Node.js de Vercel. Las páginas públicas se prerenderizan como archivos estáticos; las rutas `/api/*`, `/oauth2/*`, `/userinfo` y `/connect/logout` se ejecutan bajo demanda en Vercel.
+`web/` es la única aplicación desplegable. Astro y sus funciones Node.js alojan las páginas y las rutas de identidad. MongoDB es un servicio gestionado externo; no se ejecutan servidores, contenedores ni procesos auxiliares del proyecto.
 
-Vercel ejecuta la aplicación y su lógica de backend, pero MongoDB y el servidor SMTP siguen siendo servicios externos. La carpeta `backend/` contiene el backend Java anterior y no se incluye en este despliegue.
+1. Importa el repositorio en Vercel y configura **Root Directory** como `web`.
+2. Usa el preset Astro, Node.js 22.12 o posterior, `npm ci` para instalar y `npm run build` para construir.
+3. Define las variables obligatorias para Preview y Production, manteniendo bases y secretos separados.
+4. Alinea la región de las funciones con la región de MongoDB y mide la latencia desde las funciones desplegadas.
+5. Inicializa los índices de la base y verifica `/api/health`, `/.well-known/openid-configuration` y `/oauth2/jwks` en un despliegue Preview.
 
-## Configurar el proyecto
-
-1. Importa `Spinnin34/KarmancosID` desde GitHub en Vercel.
-2. En **Settings → Build and Deployment**, selecciona **Root Directory: `web`**. Este paso elimina la detección ambigua de Astro y Container que aparecía cuando se intentaba construir el repositorio completo.
-3. Usa el preset **Astro**, Node.js **22.x** o superior, el comando de instalación `npm install` y el comando de build `npm run build`. Vercel suele detectarlos automáticamente desde `web/package.json`.
-4. Añade las variables de entorno de las secciones siguientes para Production y Preview según corresponda.
-5. Despliega la rama `main` y revisa `/api/health` y `/.well-known/openid-configuration`.
-
-No configures un servicio Container, Dockerfile ni `PORT` para la web de Vercel. `vercel.json` ya no define servicios separados.
+La guía de [regiones de funciones de Vercel](https://vercel.com/docs/functions/configuring-functions/region) explica cómo configurar la proximidad regional. Ajusta los pools siguiendo las [opciones de conexión del driver de MongoDB](https://www.mongodb.com/docs/drivers/node/current/connect/connection-options/connection-pools/).
 
 ## Variables de entorno
 
-### Necesarias
-
-| Variable | Valor |
-| --- | --- |
-| `MONGODB_URI` | URI de conexión privada a la base de datos MongoDB. El usuario necesita acceso de lectura y escritura a las colecciones de Karmancos ID. |
-| `KARMANCOS_SUBJECT_HMAC_SECRET` | Secreto aleatorio y estable de al menos 32 caracteres para crear los `sub` pairwise. No lo cambies sin planear una migración. |
-| `KARMANCOS_PRIVATE_KEY_PEM_B64` | PEM RSA privado PKCS#8 codificado en Base64, en una sola línea. |
-| `KARMANCOS_PUBLIC_KEY_PEM_B64` | PEM RSA público X.509 codificado en Base64, en una sola línea. Debe corresponder a la clave privada. |
-| `PUBLIC_IDENTITY_ISSUER` | Origen público HTTPS, por ejemplo `https://karmancosid.vercel.app`. Se usa para generar el documento OIDC durante el build. |
-
-### Recomendadas u opcionales
+### Obligatorias
 
 | Variable | Uso |
 | --- | --- |
-| `KARMANCOS_ISSUER` | Emisor OIDC en ejecución. Puede omitirse si `PUBLIC_IDENTITY_ISSUER` está configurada con el mismo origen. |
-| `KARMANCOS_PUBLIC_BASE_URL` | Origen de los enlaces de verificación y recuperación. Puede omitirse si coincide con el emisor. |
-| `MONGODB_DATABASE` | Nombre de la base de datos; si se omite, se toma de `MONGODB_URI` o se usa `karmancosid`. |
-| `KARMANCOS_SECURE_COOKIES` | Déjala en `true` en Vercel; es el valor predeterminado bajo HTTPS. |
-| `KARMANCOS_SESSION_COOKIE_NAME` | Nombre de la cookie de sesión. El predeterminado es `KARMANCOSID`. |
-| `MONGODB_CREATE_INDEXES` | Ponla en `true` para crear los índices de la nueva API en MongoDB. Tras el primer despliegue correcto, puedes dejarla en `false`; los índices ya creados se conservan. |
-| `KARMANCOS_BOOTSTRAP_ADMIN_EMAIL` | Cuenta para crear el primer administrador solo si aún no existe. Después de crearlo, elimina las dos variables de bootstrap. |
-| `KARMANCOS_BOOTSTRAP_ADMIN_PASSWORD` | Contraseña temporal de bootstrap, con al menos 16 caracteres. Guárdala como secreto de Vercel y elimínala tras crear el administrador. |
+| `MONGODB_URI` | URI privada de MongoDB con privilegios mínimos sobre las colecciones de Karmancos ID. |
+| `KARMANCOS_SUBJECT_HMAC_SECRET` | Secreto aleatorio estable de al menos 32 caracteres. Cambiarlo modifica los `sub` pairwise. |
+| `KARMANCOS_PRIVATE_KEY_PEM_B64` | Clave privada RSA PKCS#8 codificada en Base64 para firmar tokens. |
+| `KARMANCOS_PUBLIC_KEY_PEM_B64` | Clave pública RSA X.509 correspondiente, codificada en Base64. |
+| `PUBLIC_IDENTITY_ISSUER` | Origen HTTPS público; Astro lo usa al generar el documento OIDC. |
+| `KARMANCOS_MFA_ENCRYPTION_KEY_B64` | Clave aleatoria de 32 bytes codificada en Base64 para cifrar secretos TOTP de administradores. |
 
-La API reutiliza los nombres `SPRING_MAIL_*` para mantener compatibilidad con la configuración anterior:
+### Opcionales
 
 | Variable | Uso |
 | --- | --- |
-| `SPRING_MAIL_HOST` | Host SMTP. Necesario para entregar los correos de verificación y recuperación. |
-| `SPRING_MAIL_PORT` | Puerto SMTP; normalmente `587` con STARTTLS o `465` con TLS. |
-| `SPRING_MAIL_USERNAME` | Usuario SMTP, si el proveedor requiere autenticación. |
-| `SPRING_MAIL_PASSWORD` | Contraseña SMTP, si el proveedor requiere autenticación. |
-| `KARMANCOS_MAIL_FROM` | Dirección remitente autorizada por el proveedor SMTP. |
+| `KARMANCOS_ISSUER` | Emisor OIDC de ejecución; usa el mismo origen que `PUBLIC_IDENTITY_ISSUER`. |
+| `MONGODB_DATABASE` | Nombre de base. Si falta, se obtiene de la URI o se usa `karmancosid`. |
+| `KARMANCOS_SECURE_COOKIES` | Mantén `true` en Vercel. Solo se desactiva para desarrollo local HTTP. |
+| `KARMANCOS_SESSION_COOKIE_NAME` | Nombre de cookie de sesión; por defecto `KARMANCOSID`. |
+| `KARMANCOS_BOOTSTRAP_ADMIN_EMAIL` | Correo de la cuenta inicial administradora, solo para el bootstrap. |
+| `KARMANCOS_BOOTSTRAP_ADMIN_PASSWORD` | Contraseña temporal de al menos 16 caracteres. Elimina ambas variables al crear la cuenta. |
 
-No añadas comillas alrededor de los valores en el panel de Vercel. No subas `.env`, contraseñas, URI privadas ni PEM al repositorio.
+No existe configuración de SMTP, envío de correo ni verificación por email. No añadas `.env`, claves PEM, contraseñas ni URI privadas al repositorio.
 
-## Claves RSA en PowerShell
+## Generar secretos
 
-Genera las claves con el método del proyecto y guarda cada PEM en un lugar seguro. Para convertir las claves existentes a las variables de Vercel sin imprimirlas en el chat:
+En PowerShell, genera una clave RSA y convierte cada PEM a Base64 en tu equipo. Mantén la salida en un gestor seguro y cópiala directamente a Vercel; no la incluyas en incidencias ni logs.
 
 ```powershell
-[Convert]::ToBase64String([IO.File]::ReadAllBytes('backend/data/keys/oidc-private.pem'))
-[Convert]::ToBase64String([IO.File]::ReadAllBytes('backend/data/keys/oidc-public.pem'))
+$rsa = [System.Security.Cryptography.RSA]::Create(3072)
+$privatePem = $rsa.ExportPkcs8PrivateKeyPem()
+$publicPem = $rsa.ExportSubjectPublicKeyInfoPem()
+[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($privatePem))
+[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($publicPem))
+[Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
 ```
 
-Copia cada resultado directamente en la variable correspondiente de Vercel. La clave privada debe permanecer secreta.
+Los tres resultados corresponden a las dos variables de clave RSA y a `KARMANCOS_MFA_ENCRYPTION_KEY_B64`. Genera `KARMANCOS_SUBJECT_HMAC_SECRET` con un generador aleatorio de al menos 32 caracteres. Conserva las claves y HMAC establemente; programa y documenta su rotación.
 
-## Base de datos y sesiones
+## Índices de MongoDB
 
-La API conserva las colecciones de usuarios, clientes, consentimientos, acciones de cuenta, auditoría y solicitudes de aplicaciones. Los usuarios y los clientes registrados pueden seguir utilizándose con sus credenciales existentes. La API nueva almacena las sesiones en `identity_sessions`; tras el cambio, todos tendrán que iniciar sesión una vez más. Las autorizaciones nuevas se guardan en MongoDB y los tokens antiguos del backend Java no se renuevan con la API nueva.
-
-Si `MONGODB_CREATE_INDEXES=true`, la API crea índices únicos para correo, nombre de usuario y clientes, además de índices TTL para sesiones, autorizaciones, límites de intentos y tokens de cuenta. En una base existente, habilítala durante el despliegue inicial y comprueba los logs de Vercel. Si MongoDB no permite crear índices, pide al administrador de la base que los cree y deja la variable en `false`.
-
-Usa una base separada para Preview. No apuntes los despliegues de prueba a los datos reales.
-
-## Comprobaciones después del despliegue
-
-- `/api/health` debe devolver `status: ok` y `database: reachable`.
-- `/.well-known/openid-configuration` debe publicar exactamente el mismo emisor que `KARMANCOS_ISSUER` o `PUBLIC_IDENTITY_ISSUER`.
-- `/oauth2/jwks` debe exponer una clave pública válida que corresponda a la privada.
-- Registro, inicio de sesión, cierre de sesión, consentimiento y acceso a cuenta deben responder usando el mismo origen de Vercel.
-- Un cliente de pruebas debe completar Authorization Code con PKCE S256 y una URI de retorno registrada exactamente.
-- SMTP debe entregar los enlaces de verificación y recuperación.
-
-Si `/api/auth/csrf` devuelve `500`, abre los logs del último deployment en Vercel. Confirma que el Root Directory sea `web`, que `MONGODB_URI` y `MONGODB_DATABASE` apunten a la base correcta y que MongoDB permita conectarse, buscar usuarios y crear sesiones en `identity_sessions`. La falta de claves RSA afecta a JWKS y tokens, pero no a la ruta CSRF.
-
-## Desarrollo local de la versión Vercel
-
-Desde PowerShell:
+Los índices se crean fuera de las solicitudes para que las funciones serverless no tengan que inicializarlos en cada arranque.
 
 ```powershell
-Copy-Item web/.env.example web/.env
-cd web
+Set-Location web
 npm ci
-npm run dev
+$env:MONGODB_URI = "<URI de la base de destino>"
+$env:MONGODB_DATABASE = "<base de destino>"
+npm run db:indexes
 ```
 
-La API se ejecuta en el propio servidor de Astro. Usa MongoDB y claves separadas de producción, `PUBLIC_IDENTITY_ISSUER=http://localhost:4321`, `KARMANCOS_ISSUER=http://localhost:4321` y `KARMANCOS_SECURE_COOKIES=false`. Solo si quieres reenviar las peticiones a un backend distinto, define `IDENTITY_API_TARGET`.
+Ejecuta el comando con un usuario de base que pueda gestionar índices y asegúrate de que la base corresponde al entorno correcto. El script es idempotente. Antes de aplicarlo a una base existente, revisa que no haya duplicados que impidan los índices únicos.
 
-## Recursos de producción
+## Datos y transición desde Java
 
-MongoDB y SMTP no se ejecutan dentro de Vercel. Elige un proveedor con disponibilidad, copias de seguridad, rotación de credenciales y capacidad adecuados para el uso esperado. Configura la región de las funciones de Vercel cerca de MongoDB para reducir latencia y vigila los límites de concurrencia y duración de las funciones.
+Antes del primer despliegue, crea una copia de seguridad y ensaya la restauración. En una base clonada, compara el esquema y los registros de usuarios y clientes con la API Node, verifica los `issuer`, claves y `sub`, y prueba Authorization Code con PKCE S256. Mantén estables el emisor, las claves de firma y el secreto HMAC para no romper la identidad de usuarios en clientes existentes. Las sesiones y tokens emitidos por la implementación anterior pueden requerir que se inicie sesión de nuevo.
+
+No publiques hasta comprobar en staging que usuarios, clientes, callbacks, consentimiento y autorizaciones son compatibles con los datos que realmente existen.
+
+## Comprobaciones previas a publicación
+
+- Verifica estado de base, descubrimiento OIDC y JWKS en Preview.
+- Completa registro, inicio/cierre de sesión, administración con TOTP y códigos de recuperación, recuperación asistida, consentimiento y revocación de sesiones.
+- Usa un cliente público de prueba para completar Authorization Code con PKCE S256 y compara callbacks exactamente.
+- Ejecuta las pruebas Basic y Configuration de la [suite de conformidad OpenID](https://openid.net/certification/about-conformance-suite/) y revisa los controles de [RFC 9700](https://www.rfc-editor.org/info/rfc9700/) y [OWASP ASVS 5](https://asvs.owasp.org/).
+- En staging, reproduce la carga estimada de los primeros 90 días con margen 2×; revisa errores, latencia, duración y conexiones MongoDB.
+- Confirma restauración de copias, alertas operativas, rotación de claves y reversión a la versión previa.
+
+Estas comprobaciones requieren infraestructura y cuentas de staging. Los workflows de CI no las simulan ni certifican el despliegue.

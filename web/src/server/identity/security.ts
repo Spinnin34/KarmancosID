@@ -177,6 +177,6 @@ export async function pairwiseSubject(user: IdentityUser, client: OAuthClient) {
   const redirectHosts = client.redirectUris.map((uri) => {
     try { return new URL(uri).hostname; } catch { return null; }
   }).filter((host): host is string => Boolean(host)).sort();
-  const sector = client.allowedOrigins?.slice().sort()[0]?.replace(/^https?:\/\//, "") || redirectHosts[0] || client.clientId;
+  const sector = client.allowedOrigins?.slice().sort()[0] || redirectHosts[0] || client.clientId;
   return createHmac("sha256", secret).update(`${sector}\0${user._id}`).digest("base64url");
 }

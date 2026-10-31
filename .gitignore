@@ -2,8 +2,8 @@
 .env.*
 !.env.example
 /backend/data/
-/backend/target/
 /backend/secrets/
+/backend/target/
 /web/node_modules/
 /web/dist/
 /web/.astro/
@@ -11,6 +11,10 @@
 /web/.env
 /web/.env.*
 !.env.example
+.taste-skill/
+web/test-results/
+web/playwright-report/
+web/coverage/
 *.pem
 *.key
 

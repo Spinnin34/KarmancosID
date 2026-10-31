@@ -9,7 +9,12 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "check": "astro check && tsc --noEmit",
+    "lint": "eslint \"src/**/*.{ts,vue}\" \"scripts/**/*.mjs\" \"tests/**/*.ts\" --max-warnings 0",
+    "test": "tsx --test tests/totp.test.ts tests/session.test.ts tests/identity.integration.test.ts ../sdk/test/sdk.test.js",
+    "test:e2e": "playwright test",
+    "db:indexes": "node scripts/create-indexes.mjs"
   },
   "dependencies": {
     "@astrojs/vercel": "^11.0.17",
@@ -20,7 +25,6 @@
     "bcryptjs": "^3.0.3",
     "jose": "^6.2.14",
     "mongodb": "^7.8.0",
-    "nodemailer": "^10.3.1",
     "sharp": "^0.35.5",
     "tailwind-merge": "^3.7.0",
     "tailwindcss": "^4.3.3",
@@ -37,9 +41,16 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@astrojs/check": "^0.9.12",
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.64.1",
     "@types/node": "^26.6.6",
-    "@types/nodemailer": "^8.0.2",
+    "eslint": "^10.14.0",
+    "eslint-plugin-vue": "^10.12.0",
+    "mongodb-memory-server": "^11.3.0",
+    "tsx": "^4.23.15",
     "typescript": "~5.9.3",
+    "typescript-eslint": "^8.72.1",
     "vite": "^8.3.5"
   }
 }

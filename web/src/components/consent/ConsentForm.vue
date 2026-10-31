@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import Badge from "@/components/ui/Badge.vue";
 import Button from "@/components/ui/Button.vue";
+import { getIdentityCsrfToken, identityApi } from "@/lib/identity-api";
 
 const props = defineProps<{ clientId?: string; state?: string; requestedScopes?: string[] }>();
 const clientId = ref(props.clientId || "");
@@ -36,15 +37,12 @@ onMounted(async () => {
   }
   try {
     const [clientResponse, csrfResponse] = await Promise.all([
-      fetch(`/api/public/clients/${encodeURIComponent(clientId.value)}`, { credentials: "same-origin" }),
-      fetch("/api/auth/csrf", { credentials: "same-origin" })
+      identityApi<{ name: string; domain: string }>(`/api/public/clients/${encodeURIComponent(clientId.value)}`),
+      getIdentityCsrfToken()
     ]);
-    const [client, csrf] = await Promise.all([clientResponse.json(), csrfResponse.json()]);
-    if (!clientResponse.ok) throw new Error(client.message || "No se pudo verificar el servicio.");
-    if (!csrfResponse.ok || typeof csrf.token !== "string") throw new Error("No se pudo preparar una solicitud segura.");
-    clientName.value = client.name;
-    clientDomain.value = client.domain;
-    csrfToken.value = csrf.token;
+    clientName.value = clientResponse.name;
+    clientDomain.value = clientResponse.domain;
+    csrfToken.value = csrfResponse;
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : "No se pudo verificar el servicio.";
   } finally {

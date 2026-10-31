@@ -4,12 +4,9 @@ import { ShieldCheck } from "@lucide/vue";
 
 interface Props {
   title: string;
-  eyebrow: string;
-  heading: string;
-  intro: string;
 }
 
-const { title, eyebrow, heading, intro } = Astro.props;
+const { title } = Astro.props;
 ---
 
 <Layout title={title}>
@@ -24,41 +21,15 @@ const { title, eyebrow, heading, intro } = Astro.props;
 
       <div class="story-main">
         <div class="story-copy">
-          <p class="story-kicker"><span class="story-kicker-line"></span>KARMANCOS ID</p>
-          <h1 id="story-title">Una cuenta.<br /><span>Todo Karmancos.</span></h1>
+          <h1 id="story-title">Una cuenta.<br />Todo Karmancos.</h1>
           <p class="story-description">Inicia sesión en los servicios Karmancos con una sola cuenta. Cada sitio te pedirá permiso antes de acceder a tus datos.</p>
         </div>
-
-        <section class="ecosystem-panel" aria-labelledby="ecosystem-title">
-          <p class="ecosystem-kicker">EN OTROS SITIOS KARMANCOS</p>
-          <h2 id="ecosystem-title">Así se verá la opción para entrar</h2>
-          <p class="ecosystem-description">Entras aquí y vuelves al sitio con tu cuenta conectada.</p>
-          <div class="ecosystem-preview-action" role="img" aria-label="Ejemplo de opción de acceso: Continuar con Karmancos ID">
-            <img src="/images/karmancos-id-mark.png" alt="" />
-            <span>Continuar con <strong>Karmancos ID</strong></span>
-          </div>
-        </section>
       </div>
-
-      <footer class="story-footer">
-        <span>Tu cuenta</span>
-        <span class="footer-separator" aria-hidden="true"></span>
-        <span>Tus permisos</span>
-      </footer>
     </section>
 
-    <section class="auth-panel" aria-label={eyebrow}>
+    <section class="auth-panel" aria-label="Cuenta de Karmancos ID" data-ui="identity-auth">
       <div class="auth-panel-inner">
-        <div class="auth-panel-top">
-          <span class="auth-panel-mode">INICIO DE SESIÓN</span>
-          <span class="auth-panel-tag">KARMANCOS ID</span>
-        </div>
         <div class="auth-flow">
-          <div class="form-heading">
-            <p class="eyebrow">{eyebrow}</p>
-            <h2>{heading}</h2>
-            <p>{intro}</p>
-          </div>
           <slot />
           <div class="auth-trust-strip">
             <span class="trust-shield" aria-hidden="true"><ShieldCheck size={21} strokeWidth={1.8} /></span>
@@ -68,7 +39,7 @@ const { title, eyebrow, heading, intro } = Astro.props;
       </div>
       <footer class="auth-panel-footer">
         <span>© {new Date().getFullYear()} Karmancos</span>
-        <span class="auth-footer-links"><a href="mailto:soporte@karmancos.com">Centro de ayuda</a></span>
+        <span class="auth-footer-links"><a href="/desarrolladores">Desarrolladores</a></span>
       </footer>
     </section>
   </main>

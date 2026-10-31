@@ -538,6 +538,30 @@
         "src/components/ui/classes.ts",
         "src/components/ui/form.ts"
       ]
+    },
+    "@balsa/input-otp": {
+      "registry": "@balsa/input-otp",
+      "namespace": "@balsa",
+      "installedVersion": "0.2.0",
+      "contractVersion": "0.2.0",
+      "designSystemVersion": "0.8.1",
+      "originalSourceHash": "sha256-f2c24960567e53f0c4b444ca27546cb13023325b2e27dff1c9d22aa25742fe1b",
+      "installedSourceHash": "sha256-f2c24960567e53f0c4b444ca27546cb13023325b2e27dff1c9d22aa25742fe1b",
+      "dependencies": [
+        "vue",
+        "@lucide/vue",
+        "tailwind-merge"
+      ],
+      "registryDependencies": [
+        "@balsa/icon",
+        "@balsa/balsa-theme"
+      ],
+      "targetPath": "src/components/ui/InputOTP.vue",
+      "files": [
+        "src/components/ui/InputOTP.vue",
+        "src/components/ui/classes.ts",
+        "src/components/ui/form.ts"
+      ]
     }
   }
 }

@@ -2,11 +2,12 @@ import bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
 import { getStore } from "./storage";
 import { addSessionCookies, clearAuthCookies, loadSession, requireAuthenticated, requireCsrf, rotateSession, saveSession, setCsrfCookie, setSessionCookie } from "./session";
-import { consumeActionToken, sendActionEmail } from "./email";
-import { consumeRateLimit, findUserByEmail, findUserByIdentifier, logAudit, removeGrantsForPrincipal, userResponse, createUser } from "./common";
-import { json, empty, clientIp, readJson, requireString } from "./http";
+import { consumeRateLimit, logAudit } from "./operations";
+import { createUser, findUserByEmail, findUserByIdentifier, userResponse } from "./user-repository";
+import { authorizationPath } from "./auth-flow";
+import { json, empty, readJson, requireString } from "./http";
 import { normalizeEmail, normalizeIdentifier, safeNextPath, validateIdentity } from "./security";
-import { HttpError, type AuthorizationRequest, type IdentityUser } from "./types";
+import { HttpError } from "./types";
 
 export async function authEndpoint(request: Request, path: string): Promise<Response | null> {
   const method = request.method.toUpperCase();
@@ -48,14 +49,13 @@ export async function authEndpoint(request: Request, path: string): Promise<Resp
     const byUsername = await collections.users.findOne({ username });
     if (existing || byUsername) throw new HttpError(409, "No se pudo crear la cuenta con esos datos.");
 
-    const user = await createUser({
+    await createUser({
       email, username, firstName: String(input.firstName), lastName: String(input.lastName),
       secondLastName: typeof input.secondLastName === "string" ? input.secondLastName : "",
       passwordHash: await bcrypt.hash(String(input.password), 12), role: "USER",
     });
-    await sendActionEmail(user, "verify");
     await logAudit(email, "account.created", email);
-    return json({ message: "Cuenta creada. Revisa tu correo para verificar la dirección." }, 201);
+    return json({ message: "Cuenta creada. Ya puedes iniciar sesión." }, 201);
   }
 
   if (path === "/api/auth/login" && method === "POST") {
@@ -81,9 +81,15 @@ export async function authEndpoint(request: Request, path: string): Promise<Resp
     const headers = new Headers();
     setSessionCookie(headers, nextContext.session._id);
     setCsrfCookie(headers, nextContext.session.csrfToken);
+    if (user.role === "ADMIN") {
+      if (user.mfaEnabledAt && user.mfaTotpSecretEncrypted) {
+        return json({ requiresMfa: true }, 200, headers);
+      }
+      return json({ requiresMfaSetup: true, next: "/configurar-2fa" }, 200, headers);
+    }
     const next = nextContext.session.requestedAuthorization
       ? authorizationPath(nextContext.session.requestedAuthorization)
-      : user.role === "ADMIN" ? "/admin" : "/cuenta";
+      : "/cuenta";
     await logAudit(user.email, "account.signed_in", user.email);
     return json({ next: safeNextPath(next) }, 200, headers);
   }
@@ -99,7 +105,7 @@ export async function authEndpoint(request: Request, path: string): Promise<Resp
   if (path === "/api/auth/logout" && method === "POST") {
     const context = await loadSession(request);
     requireCsrf(request, context);
-    requireAuthenticated(context);
+    if (!context?.user) throw new HttpError(401, "Inicia sesión para continuar.");
     const { collections } = await getStore();
     await collections.sessions.deleteOne({ _id: context.session._id });
     await logAudit(context.user.email, "account.signed_out", context.user.email);
@@ -108,79 +114,7 @@ export async function authEndpoint(request: Request, path: string): Promise<Resp
     return empty(204, headers);
   }
 
-  if (path === "/api/auth/email/verify" && method === "POST") {
-    const context = await loadSession(request);
-    requireCsrf(request, context);
-    const input = await readJson(request);
-    const rawToken = requireString(input.token, "token", 100);
-    const token = await consumeActionToken(rawToken, "verify");
-    if (!token) throw new HttpError(400, "El enlace ha caducado o ya se ha usado.");
-    const { collections } = await getStore();
-    const user = await collections.users.findOne({ _id: token.userId });
-    if (!user || normalizeEmail(user.email) !== normalizeEmail(token.targetEmail)) throw new HttpError(400, "El enlace ha caducado o ya se ha usado.");
-    await collections.users.updateOne({ _id: user._id }, { $set: { emailVerified: true } });
-    await logAudit(user.email, "account.email_verified", user.email);
-    return json({ message: "Correo electrónico verificado." });
-  }
-
-  if (path === "/api/auth/email/resend" && method === "POST") {
-    const context = await loadSession(request);
-    requireCsrf(request, context);
-    const input = await readJson(request);
-    const email = normalizeEmail(requireString(input.email, "email", 320));
-    const rate = await consumeRateLimit(request, "email-verify", email, 3, 60 * 60_000);
-    if (!rate.allowed) return json({ message: "Espera antes de volver a solicitar un correo." }, 429);
-    const user = await findUserByEmail(email);
-    if (user?.active && !user.emailVerified) await sendActionEmail(user, "verify");
-    return json({ message: "Si la cuenta existe y necesita verificación, enviaremos un enlace al correo indicado." }, 202);
-  }
-
-  if (path === "/api/auth/password/reset-request" && method === "POST") {
-    const context = await loadSession(request);
-    requireCsrf(request, context);
-    const input = await readJson(request);
-    const email = normalizeEmail(requireString(input.email, "email", 320));
-    const rate = await consumeRateLimit(request, "password-reset", email, 4, 60 * 60_000);
-    if (!rate.allowed) return json({ message: "Espera antes de volver a solicitar una recuperación." }, 429);
-    const user = await findUserByEmail(email);
-    if (user) await sendActionEmail(user, "reset");
-    return json({ message: "Si existe una cuenta para ese correo, recibirás instrucciones para restablecer la contraseña." }, 202);
-  }
-
-  if (path === "/api/auth/password/reset" && method === "POST") {
-    const context = await loadSession(request);
-    requireCsrf(request, context);
-    const input = await readJson(request);
-    const tokenValue = requireString(input.token, "token", 100);
-    const password = requireString(input.newPassword, "newPassword", 128);
-    if (password.length < 12) throw new HttpError(400, "La contraseña debe tener entre 12 y 128 caracteres.");
-    const token = await consumeActionToken(tokenValue, "reset");
-    if (!token) throw new HttpError(400, "El enlace ha caducado o ya se ha usado.");
-    const { collections } = await getStore();
-    const user = await collections.users.findOne({ _id: token.userId });
-    if (!user || normalizeEmail(user.email) !== normalizeEmail(token.targetEmail)) throw new HttpError(400, "El enlace ha caducado o ya se ha usado.");
-    await collections.users.updateOne({ _id: user._id }, { $set: { passwordHash: await bcrypt.hash(password, 12) } });
-    await collections.sessions.deleteMany({ email: normalizeEmail(user.email) });
-    await removeGrantsForPrincipal(user.email);
-    await logAudit(user.email, "account.password_reset", user._id);
-    return json({ message: "Contraseña actualizada. Ya puedes iniciar sesión." });
-  }
-
   return null;
-}
-
-function authorizationPath(request: AuthorizationRequest) {
-  const params = new URLSearchParams({
-    client_id: request.clientId,
-    redirect_uri: request.redirectUri,
-    response_type: request.responseType,
-    scope: request.scopes.join(" "),
-    state: request.state,
-    code_challenge: request.codeChallenge,
-    code_challenge_method: request.codeChallengeMethod,
-  });
-  if (request.nonce) params.set("nonce", request.nonce);
-  return `/oauth2/authorize?${params.toString()}`;
 }
 
 export async function bootstrapAdmin() {

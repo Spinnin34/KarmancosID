@@ -517,3 +517,133 @@ body { color-scheme: dark; background: var(--identity-paper); color: var(--ident
   .auth-story { border-bottom-color: var(--identity-rule); }
   .auth-trust-strip { grid-template-columns: 44px minmax(0, 1fr); gap: 11px; }
 }
+
+/* Auth pages keep one clear reading column on narrow screens. */
+.auth-shell {
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr);
+  gap: 0;
+  background: var(--identity-paper);
+  font-family: Inter, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+}
+.auth-shell *:not(svg):not(code) { font-family: inherit; }
+.auth-story {
+  min-width: 0;
+  border-right: 0;
+  background: transparent;
+  padding-inline: clamp(40px, 5vw, 80px);
+}
+.story-main { width: 100%; max-width: 760px; }
+.story-copy { max-width: 100%; }
+.story-copy h1 {
+  max-width: none;
+  font-family: inherit;
+  font-size: clamp(56px, 5.3vw, 76px);
+  line-height: 1;
+  letter-spacing: -.06em;
+}
+.story-description { max-width: 50ch; font-size: 16px; }
+.auth-panel {
+  min-width: 0;
+  border: 0;
+  background: #171a1e;
+}
+.auth-panel-inner { min-width: 0; }
+.auth-flow .form-heading { margin-bottom: 24px; }
+.auth-flow .form-heading h2 { font-size: clamp(32px, 3vw, 40px); }
+.auth-flow .form-heading h3 { font-size: 25px; }
+.auth-flow .form-heading > p:last-child { font-size: 15px; }
+.login-fields [data-balsa="input"] label,
+.register-fields [data-balsa="input"] label { font-size: 13px; }
+.login-fields [data-balsa-control],
+.register-fields [data-balsa-control] { font-size: 15px; }
+.register-fields .field-note,
+.login-recovery-link,
+.auth-switch,
+.auth-panel-footer { font-size: 13px; }
+.auth-trust-strip strong { font-size: 13px; }
+.auth-trust-strip p > span { font-size: 13px; }
+.auth-panel-footer { margin-top: 24px; }
+
+@media (max-width: 900px) {
+  .auth-shell {
+    width: min(100%, 720px);
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding: 24px;
+  }
+  .auth-story,
+  .auth-panel { width: 100%; min-width: 0; }
+  .auth-story { min-height: 0; padding: 24px 24px 20px; }
+  .story-main { margin: 22px 0 0; padding: 0; }
+  .story-copy h1 { font-size: clamp(44px, 7vw, 56px); }
+  .auth-panel { min-height: 0; padding: 32px 28px; }
+  .auth-panel-inner { width: 100%; flex: 0 1 auto; }
+  .auth-flow { margin: 0; }
+  .auth-panel-footer { width: 100%; margin-top: 24px; }
+}
+
+@media (max-width: 560px) {
+  .auth-shell { gap: 0; padding: 14px; }
+  .auth-story { padding: 20px 8px 18px; }
+  .story-topline { margin-bottom: 18px; }
+  .story-main { margin: 0 0 18px; }
+  .story-copy h1 { font-size: clamp(32px, 8.2vw, 38px); }
+  .story-description { font-size: 15px; line-height: 1.6; }
+  .auth-panel { padding: 26px 18px; }
+  .auth-panel-footer { margin-top: 20px; }
+  .auth-flow .form-heading h2 { font-size: 32px; }
+  .auth-trust-strip { grid-template-columns: 36px minmax(0, 1fr); gap: 10px; }
+  .trust-shield { width: 36px; height: 36px; flex-basis: 36px; }
+}
+
+@media (max-width: 760px) {
+  .auth-story { border-bottom: 0; }
+}
+
+@keyframes auth-content-arrive {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.auth-story .brand-lockup,
+.story-copy h1,
+.story-description,
+.auth-flow .form-heading h2,
+.auth-flow .form-heading > p,
+.auth-panel-footer { animation: auth-content-arrive 300ms cubic-bezier(.2, .7, .2, 1) both; }
+.story-copy h1 { animation-delay: 55ms; }
+.story-description { animation-delay: 100ms; }
+.auth-flow .form-heading h2 { animation-delay: 120ms; }
+.auth-flow .form-heading > p { animation-delay: 160ms; }
+.login-form .login-fields > *,
+.register-form .register-fields > *,
+.account-recovery-form > *,
+.mfa-setup > * { animation: auth-content-arrive 280ms cubic-bezier(.2, .7, .2, 1) both; }
+.login-form .login-fields > :nth-child(2),
+.register-form .register-fields > :nth-child(2),
+.account-recovery-form > :nth-child(2) { animation-delay: 45ms; }
+.login-form .login-fields > :nth-child(3),
+.register-form .register-fields > :nth-child(3),
+.account-recovery-form > :nth-child(3) { animation-delay: 90ms; }
+.login-form .login-fields > :nth-child(4),
+.register-form .register-fields > :nth-child(4),
+.account-recovery-form > :nth-child(4) { animation-delay: 135ms; }
+.auth-trust-strip,
+.auth-shell a,
+.auth-shell button { transition: transform 150ms ease-out, color 150ms ease-out; }
+.auth-shell a:hover,
+.auth-shell button:hover:not(:disabled) { transform: translateY(-1px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-story .brand-lockup,
+  .story-copy h1,
+  .story-description,
+  .auth-flow .form-heading h2,
+  .auth-flow .form-heading > p,
+  .auth-panel-footer,
+  .login-form .login-fields > *,
+  .register-form .register-fields > *,
+  .account-recovery-form > *,
+  .mfa-setup > *,
+  .auth-shell a,
+  .auth-shell button { animation: none; transition: none; }
+}

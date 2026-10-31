@@ -1,0 +1,10 @@
+---
+import AuthSurface from "../components/auth/AuthSurface.astro";
+import AdminMfaSetup from "../components/auth/AdminMfaSetup.vue";
+
+export const prerender = true;
+---
+
+<AuthSurface title="Karmancos ID · Verificación en dos pasos">
+  <AdminMfaSetup client:load />
+</AuthSurface>

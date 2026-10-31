@@ -1,5 +1,7 @@
 import { authEndpoint, bootstrapAdmin } from "./auth";
 import { accountEndpoint } from "./account";
+import { accountRecoveryEndpoint } from "./account-recovery";
+import { mfaEndpoint } from "./mfa";
 import { publicEndpoint } from "./public";
 import { oauthEndpoint } from "./oauth";
 import { json, safeJsonError } from "./http";
@@ -18,6 +20,8 @@ export async function handleIdentityRequest(request: Request): Promise<Response>
     const endpoints = [
       () => publicEndpoint(request, path),
       () => authEndpoint(request, path),
+      () => mfaEndpoint(request, path),
+      () => accountRecoveryEndpoint(request, path),
       () => accountEndpoint(request, path),
       () => oauthEndpoint(request, path),
     ];

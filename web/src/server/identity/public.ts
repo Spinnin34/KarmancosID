@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { getStore } from "./storage";
-import { consumeRateLimit, findUserByEmail, logAudit, rawPicture } from "./common";
+import { consumeRateLimit } from "./operations";
+import { rawPicture } from "./user-repository";
 import { loadSession, requireCsrf } from "./session";
-import { clientIp, empty, json, readJson, requireString } from "./http";
+import { empty, json, readJson, requireString } from "./http";
 import { emailRegex, normalizeEmail } from "./security";
 import { HttpError } from "./types";
 

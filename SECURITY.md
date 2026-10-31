@@ -1,26 +1,17 @@
 # Seguridad
 
-Karmancos ID gestiona credenciales y tokens de identidad. No uses el issue tracker público para describir vulnerabilidades sin corregir ni adjuntar datos sensibles.
+Karmancos ID gestiona contraseñas, sesiones y tokens de identidad. No publiques vulnerabilidades, credenciales, tokens, datos personales ni instrucciones de explotación en una incidencia pública.
 
-## Reportar una vulnerabilidad
+## Reportar vulnerabilidades
 
-Usa la función **Private vulnerability reporting** de GitHub para este repositorio si está habilitada. Si no está disponible, contacta en privado a los mantenedores y comparte únicamente la información necesaria para reproducir el problema. No publiques secretos, tokens, datos de usuarios o instrucciones de explotación en una incidencia pública.
+Usa **Private vulnerability reporting** de GitHub si está habilitado. Si no, contacta en privado a las personas mantenedoras con los datos mínimos para investigar. El proyecto no publica un SLA ni un programa de recompensas.
 
-Incluye cuando sea posible:
+## Controles y límites
 
-- Una descripción breve y el impacto probable.
-- Versiones, configuración y componentes afectados.
-- Pasos de reproducción en un entorno de prueba sin datos reales.
-- Una mitigación provisional, si existe.
+La implementación incluye PKCE S256, callback exacto, `state` y `nonce`, protección CSRF, cookies HTTP-only, límite de intentos persistido, hash BCrypt, revocación de sesiones y autorizaciones, TOTP obligatorio para administradores, códigos de recuperación de un solo uso, registro de auditoría, CORS acotado y cabeceras de seguridad.
 
-Los mantenedores deben confirmar recepción por un canal privado, investigar y coordinar la publicación de la corrección. No se especifican tiempos de respuesta ni programa de recompensas hasta que el proyecto los defina formalmente.
+El producto no tiene sistema de correo: no verifica automáticamente direcciones y no puede recuperar cuentas por email. La recuperación requiere verificación de identidad fuera de la aplicación y actuación de administración con MFA. El código no constituye una auditoría ni una certificación de seguridad.
 
-## Alcance de las medidas actuales
+Antes de producción, despliega con TLS, privilegios mínimos de MongoDB, secretos gestionados, clave MFA respaldada de forma segura, copias con restauración probada, alertas, rotación documentada y staging aislado. Valida el protocolo con la [suite de conformidad OpenID](https://openid.net/certification/about-conformance-suite/), revisa [RFC 9700](https://www.rfc-editor.org/info/rfc9700/) y usa [OWASP ASVS 5](https://asvs.owasp.org/) como guía.
 
-El código incluye controles de OIDC/PKCE, CSRF web, límites de intentos, hash de contraseñas, revocación de sesiones, tokens de correo de un solo uso, CORS acotado y cabeceras de navegador. Estos controles reducen riesgos conocidos, pero no constituyen una auditoría ni una certificación de seguridad.
-
-MFA con passkeys o TOTP aún no está implementada. El despliegue necesita TLS, claves externas protegidas, secretos administrados, MongoDB con privilegios mínimos, copias de seguridad, monitorización y pruebas de recuperación.
-
-## Uso responsable
-
-Prueba solo sistemas y cuentas para los que tengas autorización. Usa datos sintéticos y un entorno de staging aislado. No añadas información personal o secretos a logs, capturas, incidencias ni pull requests.
+Prueba solo sistemas y cuentas para los que tengas autorización. Utiliza datos sintéticos y nunca compartas secretos en logs, capturas, issues o pull requests.
