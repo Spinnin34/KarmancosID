@@ -75,7 +75,9 @@ async function connectStore(): Promise<{ db: Db; collections: Collections }> {
         // rejects an equivalent index if the same key already exists under
         // a different name.
         collections.actionTokens.createIndex({ purgeAt: 1 }, { expireAfterSeconds: 0, name: "purgeAt" }),
-        collections.audit.createIndex({ occurredAt: -1 }, { name: "occurredAt" }),
+        // Mongo can traverse a single-key ascending index in reverse for
+        // descending sorts, so retain the legacy direction as well.
+        collections.audit.createIndex({ occurredAt: 1 }, { name: "occurredAt" }),
         collections.applications.createIndex({ submittedAt: -1 }, { name: "idx_applications_submitted_at" }),
         collections.revocations.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0, name: "ttl_oauth_revocations" }),
       ]);
