@@ -19,7 +19,7 @@ spring:
       fail-on-unknown-properties: true
 
 server:
-  port: 8080
+  port: ${PORT:8080}
   forward-headers-strategy: framework
   error:
     include-message: never
