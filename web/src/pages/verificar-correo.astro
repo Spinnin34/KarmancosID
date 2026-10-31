@@ -1,0 +1,9 @@
+---
+import AuthSurface from "../components/auth/AuthSurface.astro";
+import AccountActionForm from "../components/auth/AccountActionForm.vue";
+---
+
+<AuthSurface title="Karmancos ID · Verificar correo" eyebrow="Protección de cuenta" heading="Verifica tu correo" intro="Confirma que puedes recibir mensajes en esta dirección.">
+  <AccountActionForm mode="verify" client:load />
+  <p class="auth-switch"><a href="/login">Ir a iniciar sesión</a> · <a href="/reenviar-verificacion">Solicitar otro enlace</a></p>
+</AuthSurface>

@@ -1,0 +1,543 @@
+{
+  "schemaVersion": 2,
+  "components": {
+    "@balsa/balsa-foundation": {
+      "registry": "@balsa/balsa-foundation",
+      "namespace": "@balsa",
+      "origin": "https://balsa-ui.com/r/balsa-foundation.json",
+      "installedVersion": "0.1.0",
+      "designSystemVersion": "0.8.1",
+      "originalSourceHash": "sha256-4e20f4ad5ea63bdce72e6785a52d2119053d2cfc7d6a691b8e5739a188309512",
+      "installedSourceHash": "sha256-4e20f4ad5ea63bdce72e6785a52d2119053d2cfc7d6a691b8e5739a188309512",
+      "dependencies": [
+        "tailwindcss"
+      ],
+      "registryDependencies": [],
+      "targetPath": "src/styles/balsa-foundation.css",
+      "files": [
+        "src/styles/balsa-foundation.css"
+      ]
+    },
+    "@balsa/shared/theme-core": {
+      "registry": "@balsa/shared/theme-core",
+      "namespace": "@balsa",
+      "origin": "https://balsa-ui.com/r/theme-core.json",
+      "installedVersion": "0.1.0",
+      "designSystemVersion": "0.8.1",
+      "originalSourceHash": "sha256-c5a73abb4144b466786c0995cab45c7c4e3f292c6c5c332452dcaa8c478d207a",
+      "installedSourceHash": "sha256-c5a73abb4144b466786c0995cab45c7c4e3f292c6c5c332452dcaa8c478d207a",
+      "dependencies": [],
+      "registryDependencies": [],
+      "targetPath": "src/components/ui/theme-core.ts",
+      "files": [
+        "src/components/ui/theme-core.ts",
+        "src/components/ui/theme-component-contracts.ts"
+      ]
+    },
+    "@balsa/balsa-theme": {
+      "registry": "@balsa/balsa-theme",
+      "namespace": "@balsa",
+      "origin": "https://balsa-ui.com/r/balsa-theme.json",
+      "installedVersion": "0.1.0",
+      "designSystemVersion": "0.8.1",
+      "originalSourceHash": "sha256-bae8618964ca7e45e55e74dd03aba06ea73613167c1f4f8eeeda35a54f35033a",
+      "installedSourceHash": "sha256-bae8618964ca7e45e55e74dd03aba06ea73613167c1f4f8eeeda35a54f35033a",
+      "dependencies": [
+        "vue",
+        "tailwindcss",
+        "@lucide/vue"
+      ],
+      "registryDependencies": [
+        "@balsa/balsa-foundation",
+        "@balsa/shared/theme-core"
+      ],
+      "targetPath": "src/styles/balsa-theme.css",
+      "files": [
+        "src/styles/balsa-theme.css",
+        "src/components/ui/theme.ts",
+        "src/components/ui/theme-context.ts",
+        "src/components/ui/BalsaThemeProvider.vue",
+        "src/theme/theme-store.ts"
+      ]
+    },
+    "@balsa/balsa-palette": {
+      "registry": "@balsa/balsa-palette",
+      "namespace": "@balsa",
+      "origin": "https://balsa-ui.com/r/balsa-palette.json",
+      "installedVersion": "0.1.0",
+      "designSystemVersion": "0.8.1",
+      "originalSourceHash": "sha256-069bc4e3c815a4e00729fef152031398458613018cc820f2a55572dfa841aa1d",
+      "installedSourceHash": "sha256-069bc4e3c815a4e00729fef152031398458613018cc820f2a55572dfa841aa1d",
+      "dependencies": [
+        "tailwindcss"
+      ],
+      "registryDependencies": [
+        "@balsa/balsa-foundation"
+      ],
+      "targetPath": "src/styles/balsa-palette.css",
+      "files": [
+        "src/styles/balsa-palette.css"
+      ]
+    },
+    "@balsa/balsa-shadcn-bridge": {
+      "registry": "@balsa/balsa-shadcn-bridge",
+      "namespace": "@balsa",
+      "origin": "https://balsa-ui.com/r/balsa-shadcn-bridge.json",
+      "installedVersion": "0.1.0",
+      "designSystemVersion": "0.8.1",
+      "originalSourceHash": "sha256-6054b7bee1cf51777aa825e5dbf49d8b597fdd622d73690bc91793170a0786bb",
+      "installedSourceHash": "sha256-6054b7bee1cf51777aa825e5dbf49d8b597fdd622d73690bc91793170a0786bb",
+      "dependencies": [
+        "tailwindcss"
+      ],
+      "registryDependencies": [
+        "@balsa/balsa-foundation",
+        "@balsa/balsa-theme"
+      ],
+      "targetPath": "src/styles/balsa-shadcn-bridge.css",
+      "files": [
+        "src/styles/balsa-shadcn-bridge.css"
+      ]
+    },
+    "@balsa/design-system-my-design-system": {
+      "registry": "@balsa/design-system-my-design-system",
+      "namespace": "@balsa",
+      "installedVersion": "1.0.0",
+      "designSystemVersion": "0.8.1",
+      "originalSourceHash": "sha256-72f5a039c76cdb4c2a519e526c2c2ff61b02791d98d63857f7a3ef06b13bce82",
+      "installedSourceHash": "sha256-72f5a039c76cdb4c2a519e526c2c2ff61b02791d98d63857f7a3ef06b13bce82",
+      "targetPath": "src/themes/my-design-system.ts",
+      "files": [
+        "src/themes/my-design-system.ts",
+        "src/styles/my-design-system-palette.css"
+      ]
+    },
+    "@balsa/icon": {
+      "registry": "@balsa/icon",
+      "namespace": "@balsa",
+      "installedVersion": "0.1.0",
+      "contractVersion": "0.1.0",
+      "designSystemVersion": "0.8.1",
+      "originalSourceHash": "sha256-ef7e3dcd4d0fbbf0312209dac2a220f05ba08638308211f5e304607bbc594a7d",
+      "installedSourceHash": "sha256-ef7e3dcd4d0fbbf0312209dac2a220f05ba08638308211f5e304607bbc594a7d",
+      "dependencies": [
+        "vue",
+        "@lucide/vue"
+      ],
+      "registryDependencies": [],
+      "targetPath": "src/components/ui/Icon.vue",
+      "files": [
+        "src/components/ui/Icon.vue"
+      ]
+    },
+    "@balsa/button": {
+      "registry": "@balsa/button",
+      "namespace": "@balsa",
+      "installedVersion": "0.1.1",
+      "contractVersion": "0.1.1",
+      "designSystemVersion": "0.8.1",
+      "originalSourceHash": "sha256-c1db867797794bd4730024d78b27b091de089a341f034d13f17e8cfd2200ef0f",
+      "installedSourceHash": "sha256-c1db867797794bd4730024d78b27b091de089a341f034d13f17e8cfd2200ef0f",
+      "dependencies": [
+        "vue",
+        "@lucide/vue",
+        "tailwind-merge"
+      ],
+      "registryDependencies": [
+        "@balsa/icon",
+        "@balsa/balsa-theme"
+      ],
+      "targetPath": "src/components/ui/Button.vue",
+      "files": [
+        "src/components/ui/Button.vue",
+        "src/components/ui/types.ts",
+        "src/components/ui/classes.ts"
+      ]
+    },
+    "@balsa/input": {
+      "registry": "@balsa/input",
+      "namespace": "@balsa",
+      "installedVersion": "0.1.0",
+      "contractVersion": "0.1.0",
+      "designSystemVersion": "0.8.1",
+      "originalSourceHash": "sha256-b348a979a53dce3e9d59685983078434048d73c7edf2d0513534dc123a1d8bf7",
+      "installedSourceHash": "sha256-b348a979a53dce3e9d59685983078434048d73c7edf2d0513534dc123a1d8bf7",
+      "dependencies": [
+        "vue",
+        "@lucide/vue",
+        "tailwind-merge"
+      ],
+      "registryDependencies": [
+        "@balsa/icon",
+        "@balsa/balsa-theme"
+      ],
+      "targetPath": "src/components/ui/Input.vue",
+      "files": [
+        "src/components/ui/Input.vue",
+        "src/components/ui/form.ts",
+        "src/components/ui/classes.ts"
+      ]
+    },
+    "@balsa/checkbox": {
+      "registry": "@balsa/checkbox",
+      "namespace": "@balsa",
+      "installedVersion": "0.1.0",
+      "contractVersion": "0.1.0",
+      "designSystemVersion": "0.8.1",
+      "originalSourceHash": "sha256-1223778bdf7a2b2f8d08b956fb42fdb15a9c36ce5cd21016c95429bf56d5ade8",
+      "installedSourceHash": "sha256-1223778bdf7a2b2f8d08b956fb42fdb15a9c36ce5cd21016c95429bf56d5ade8",
+      "dependencies": [
+        "vue",
+        "@lucide/vue"
+      ],
+      "registryDependencies": [
+        "@balsa/icon",
+        "@balsa/balsa-theme"
+      ],
+      "targetPath": "src/components/ui/Checkbox.vue",
+      "files": [
+        "src/components/ui/Checkbox.vue",
+        "src/components/ui/form.ts"
+      ]
+    },
+    "@balsa/textarea": {
+      "registry": "@balsa/textarea",
+      "namespace": "@balsa",
+      "installedVersion": "0.1.0",
+      "contractVersion": "0.1.0",
+      "designSystemVersion": "0.8.1",
+      "originalSourceHash": "sha256-e990a7a7ed6581ae56f79944a71edd1ef0b83f007c40c18486822acf52e9d1d6",
+      "installedSourceHash": "sha256-e990a7a7ed6581ae56f79944a71edd1ef0b83f007c40c18486822acf52e9d1d6",
+      "dependencies": [
+        "vue",
+        "@lucide/vue",
+        "tailwind-merge"
+      ],
+      "registryDependencies": [
+        "@balsa/icon",
+        "@balsa/balsa-theme"
+      ],
+      "targetPath": "src/components/ui/Textarea.vue",
+      "files": [
+        "src/components/ui/Textarea.vue",
+        "src/components/ui/form.ts",
+        "src/components/ui/classes.ts"
+      ]
+    },
+    "@balsa/spinner": {
+      "registry": "@balsa/spinner",
+      "namespace": "@balsa",
+      "installedVersion": "0.1.0",
+      "contractVersion": "0.1.0",
+      "designSystemVersion": "0.8.1",
+      "originalSourceHash": "sha256-1158c5b489471c43d51866c8ca65b000b04f4412b851e256f63839224aeef527",
+      "installedSourceHash": "sha256-1158c5b489471c43d51866c8ca65b000b04f4412b851e256f63839224aeef527",
+      "dependencies": [
+        "vue",
+        "tailwind-merge"
+      ],
+      "registryDependencies": [
+        "@balsa/balsa-theme"
+      ],
+      "targetPath": "src/components/ui/Spinner.vue",
+      "files": [
+        "src/components/ui/Spinner.vue",
+        "src/components/ui/classes.ts",
+        "src/components/ui/types.ts"
+      ]
+    },
+    "@balsa/table": {
+      "registry": "@balsa/table",
+      "namespace": "@balsa",
+      "installedVersion": "0.2.0",
+      "contractVersion": "0.2.0",
+      "designSystemVersion": "0.8.1",
+      "originalSourceHash": "sha256-d493df69fe63d3c181bd6b0cdd158a2b59ac52aa6a0a95e1395160bfe6351a3b",
+      "installedSourceHash": "sha256-d493df69fe63d3c181bd6b0cdd158a2b59ac52aa6a0a95e1395160bfe6351a3b",
+      "dependencies": [
+        "vue",
+        "tailwind-merge"
+      ],
+      "registryDependencies": [
+        "@balsa/icon",
+        "@balsa/spinner",
+        "@balsa/balsa-theme"
+      ],
+      "targetPath": "src/components/ui/Table.vue",
+      "files": [
+        "src/components/ui/Table.vue",
+        "src/components/ui/classes.ts",
+        "src/components/ui/form.ts"
+      ]
+    },
+    "@balsa/card": {
+      "registry": "@balsa/card",
+      "namespace": "@balsa",
+      "installedVersion": "0.1.0",
+      "contractVersion": "0.1.0",
+      "designSystemVersion": "0.8.1",
+      "originalSourceHash": "sha256-d2cf6ae165aa5730d8a9259e6f52429f4d1e740885a552c32efebd9f4378910a",
+      "installedSourceHash": "sha256-d2cf6ae165aa5730d8a9259e6f52429f4d1e740885a552c32efebd9f4378910a",
+      "dependencies": [
+        "vue",
+        "tailwind-merge"
+      ],
+      "registryDependencies": [
+        "@balsa/balsa-theme"
+      ],
+      "targetPath": "src/components/ui/Card.vue",
+      "files": [
+        "src/components/ui/Card.vue",
+        "src/components/ui/types.ts",
+        "src/components/ui/classes.ts"
+      ]
+    },
+    "@balsa/application-card": {
+      "registry": "@balsa/application-card",
+      "namespace": "@balsa",
+      "installedVersion": "0.1.0",
+      "contractVersion": "0.1.0",
+      "designSystemVersion": "0.8.1",
+      "originalSourceHash": "sha256-b3a9f9afe65fd0baf231afee548cd93e2b837ce7b09d7d29e4c8bdbf5ceab997",
+      "installedSourceHash": "sha256-b3a9f9afe65fd0baf231afee548cd93e2b837ce7b09d7d29e4c8bdbf5ceab997",
+      "dependencies": [
+        "vue"
+      ],
+      "registryDependencies": [
+        "@balsa/card"
+      ],
+      "targetPath": "src/components/compositions/ApplicationCard.vue",
+      "files": [
+        "src/components/compositions/ApplicationCard.vue"
+      ]
+    },
+    "@balsa/avatar": {
+      "registry": "@balsa/avatar",
+      "namespace": "@balsa",
+      "installedVersion": "0.1.0",
+      "contractVersion": "0.1.0",
+      "designSystemVersion": "0.8.1",
+      "originalSourceHash": "sha256-59412cd92ef6f30448f24fbeef56fecba09a252148e4394a98fabedf5972a1f0",
+      "installedSourceHash": "sha256-59412cd92ef6f30448f24fbeef56fecba09a252148e4394a98fabedf5972a1f0",
+      "dependencies": [
+        "vue",
+        "tailwind-merge"
+      ],
+      "registryDependencies": [
+        "@balsa/balsa-theme"
+      ],
+      "targetPath": "src/components/ui/Avatar.vue",
+      "files": [
+        "src/components/ui/Avatar.vue",
+        "src/components/ui/classes.ts"
+      ]
+    },
+    "@balsa/activity-timeline-card": {
+      "registry": "@balsa/activity-timeline-card",
+      "namespace": "@balsa",
+      "installedVersion": "0.1.1",
+      "contractVersion": "0.1.1",
+      "designSystemVersion": "0.8.1",
+      "originalSourceHash": "sha256-e6b7667f9c88004b36fd2d0cab689f8c9dc42581f43ce7b743c740742d0dc100",
+      "installedSourceHash": "sha256-e6b7667f9c88004b36fd2d0cab689f8c9dc42581f43ce7b743c740742d0dc100",
+      "dependencies": [
+        "vue",
+        "@lucide/vue"
+      ],
+      "registryDependencies": [
+        "@balsa/application-card",
+        "@balsa/avatar"
+      ],
+      "targetPath": "src/components/compositions/ActivityTimelineCard.vue",
+      "files": [
+        "src/components/compositions/ActivityTimelineCard.vue",
+        "src/components/compositions/_CompositionRoot.vue",
+        "src/components/compositions/composition.ts"
+      ]
+    },
+    "@balsa/badge": {
+      "registry": "@balsa/badge",
+      "namespace": "@balsa",
+      "installedVersion": "0.1.0",
+      "contractVersion": "0.1.0",
+      "designSystemVersion": "0.8.1",
+      "originalSourceHash": "sha256-d16058524e06befd7b02d00a6bcd9ec67f8c0813848cae73e9c00f3ab258268e",
+      "installedSourceHash": "sha256-d16058524e06befd7b02d00a6bcd9ec67f8c0813848cae73e9c00f3ab258268e",
+      "dependencies": [
+        "vue",
+        "tailwind-merge"
+      ],
+      "registryDependencies": [
+        "@balsa/balsa-theme"
+      ],
+      "targetPath": "src/components/ui/Badge.vue",
+      "files": [
+        "src/components/ui/Badge.vue",
+        "src/components/ui/types.ts",
+        "src/components/ui/classes.ts"
+      ]
+    },
+    "@balsa/select": {
+      "registry": "@balsa/select",
+      "namespace": "@balsa",
+      "installedVersion": "0.1.1",
+      "contractVersion": "0.1.1",
+      "designSystemVersion": "0.8.1",
+      "originalSourceHash": "sha256-80bc248f27dfb40de9eee205376cf6c1c7e06b625c4efc545e2746141de10f53",
+      "installedSourceHash": "sha256-80bc248f27dfb40de9eee205376cf6c1c7e06b625c4efc545e2746141de10f53",
+      "dependencies": [
+        "vue",
+        "@lucide/vue",
+        "tailwind-merge"
+      ],
+      "registryDependencies": [
+        "@balsa/icon",
+        "@balsa/balsa-theme"
+      ],
+      "targetPath": "src/components/ui/Select.vue",
+      "files": [
+        "src/components/ui/Select.vue",
+        "src/components/ui/form.ts",
+        "src/components/ui/classes.ts"
+      ]
+    },
+    "@balsa/tabs": {
+      "registry": "@balsa/tabs",
+      "namespace": "@balsa",
+      "installedVersion": "0.1.2",
+      "contractVersion": "0.1.2",
+      "designSystemVersion": "0.8.1",
+      "originalSourceHash": "sha256-68633fcb1bca134a524cc9162894b817a06b10ead2edd107d52dae556139dcb4",
+      "installedSourceHash": "sha256-68633fcb1bca134a524cc9162894b817a06b10ead2edd107d52dae556139dcb4",
+      "dependencies": [
+        "vue",
+        "@lucide/vue"
+      ],
+      "registryDependencies": [
+        "@balsa/icon",
+        "@balsa/balsa-theme"
+      ],
+      "targetPath": "src/components/ui/Tabs.vue",
+      "files": [
+        "src/components/ui/Tabs.vue"
+      ]
+    },
+    "@balsa/switch": {
+      "registry": "@balsa/switch",
+      "namespace": "@balsa",
+      "installedVersion": "0.1.0",
+      "contractVersion": "0.1.0",
+      "designSystemVersion": "0.8.1",
+      "originalSourceHash": "sha256-43a3a0afd6b0fdfbc66ddc4135957945258cd8a4c40e8156cbb793abeed115cc",
+      "installedSourceHash": "sha256-43a3a0afd6b0fdfbc66ddc4135957945258cd8a4c40e8156cbb793abeed115cc",
+      "dependencies": [
+        "vue"
+      ],
+      "registryDependencies": [
+        "@balsa/icon",
+        "@balsa/balsa-theme"
+      ],
+      "targetPath": "src/components/ui/Switch.vue",
+      "files": [
+        "src/components/ui/Switch.vue",
+        "src/components/ui/form.ts"
+      ]
+    },
+    "@balsa/settings-card": {
+      "registry": "@balsa/settings-card",
+      "namespace": "@balsa",
+      "installedVersion": "0.1.0",
+      "contractVersion": "0.1.0",
+      "designSystemVersion": "0.8.1",
+      "originalSourceHash": "sha256-c81f125e9c37a3e34600e24a64939d0ad960c3763ba101ab3cd2ac2a26266e34",
+      "installedSourceHash": "sha256-c81f125e9c37a3e34600e24a64939d0ad960c3763ba101ab3cd2ac2a26266e34",
+      "dependencies": [
+        "vue",
+        "@lucide/vue"
+      ],
+      "registryDependencies": [
+        "@balsa/application-card",
+        "@balsa/button",
+        "@balsa/select",
+        "@balsa/switch"
+      ],
+      "targetPath": "src/components/compositions/SettingsCard.vue",
+      "files": [
+        "src/components/compositions/SettingsCard.vue",
+        "src/components/compositions/_CompositionRoot.vue",
+        "src/components/compositions/composition.ts"
+      ]
+    },
+    "@balsa/modal": {
+      "registry": "@balsa/modal",
+      "namespace": "@balsa",
+      "installedVersion": "0.1.1",
+      "contractVersion": "0.1.1",
+      "designSystemVersion": "0.8.1",
+      "originalSourceHash": "sha256-895947fe5d3f6ee5a1efe216b09b7e141c23bdd31bbd982f92871edf8ec541be",
+      "installedSourceHash": "sha256-895947fe5d3f6ee5a1efe216b09b7e141c23bdd31bbd982f92871edf8ec541be",
+      "dependencies": [
+        "vue",
+        "@lucide/vue"
+      ],
+      "registryDependencies": [
+        "@balsa/icon",
+        "@balsa/balsa-theme"
+      ],
+      "targetPath": "src/components/ui/Modal.vue",
+      "files": [
+        "src/components/ui/Modal.vue"
+      ]
+    },
+    "@balsa/link": {
+      "registry": "@balsa/link",
+      "namespace": "@balsa",
+      "installedVersion": "0.1.1",
+      "contractVersion": "0.1.1",
+      "designSystemVersion": "0.8.1",
+      "originalSourceHash": "sha256-1f23ec6a52057bf1a470ba1e24937e82fb68fb477c14bcc53e66d47b4a76a4e9",
+      "installedSourceHash": "sha256-1f23ec6a52057bf1a470ba1e24937e82fb68fb477c14bcc53e66d47b4a76a4e9",
+      "dependencies": [
+        "vue",
+        "@lucide/vue",
+        "tailwind-merge"
+      ],
+      "registryDependencies": [
+        "@balsa/icon",
+        "@balsa/balsa-theme"
+      ],
+      "targetPath": "src/components/ui/Link.vue",
+      "files": [
+        "src/components/ui/Link.vue",
+        "src/components/ui/types.ts",
+        "src/components/ui/classes.ts",
+        "src/components/ui/navigation.ts"
+      ]
+    },
+    "@balsa/attachment": {
+      "registry": "@balsa/attachment",
+      "namespace": "@balsa",
+      "installedVersion": "0.1.0",
+      "contractVersion": "0.1.0",
+      "designSystemVersion": "0.8.1",
+      "originalSourceHash": "sha256-4b61fac7fc26a65d446b7dff0d29cb08d1a0f8878205a48245c7942bd9271d76",
+      "installedSourceHash": "sha256-4b61fac7fc26a65d446b7dff0d29cb08d1a0f8878205a48245c7942bd9271d76",
+      "dependencies": [
+        "vue",
+        "@lucide/vue",
+        "tailwind-merge"
+      ],
+      "registryDependencies": [
+        "@balsa/icon",
+        "@balsa/button",
+        "@balsa/balsa-theme"
+      ],
+      "targetPath": "src/components/ui/Attachment.vue",
+      "files": [
+        "src/components/ui/Attachment.vue",
+        "src/components/ui/classes.ts",
+        "src/components/ui/form.ts"
+      ]
+    }
+  }
+}

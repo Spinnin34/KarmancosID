@@ -1,0 +1,24 @@
+{
+  "$schema": "https://shadcn-vue.com/schema.json",
+  "style": "new-york",
+  "typescript": true,
+  "tailwind": {
+    "config": "",
+    "css": "src/index.css",
+    "baseColor": "neutral",
+    "cssVariables": true,
+    "prefix": ""
+  },
+  "iconLibrary": "lucide",
+  "aliases": {
+    "components": "@/components",
+    "ui": "@/components/ui",
+    "lib": "@/lib",
+    "utils": "@/lib/utils",
+    "composables": "@/composables"
+  },
+  "registries": {
+    "@balsa": "https://balsa-ui.com/r/{name}.json",
+    "@shadcn": "https://shadcn-vue.com/r/styles/{style}/{name}.json"
+  }
+}

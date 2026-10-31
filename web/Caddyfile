@@ -1,0 +1,24 @@
+{$CADDY_SITE} {
+	encode zstd gzip
+
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Cross-Origin-Opener-Policy "same-origin-allow-popups"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'"
+	}
+
+	@identity path /api/* /oauth2/* /.well-known/* /userinfo /connect/*
+	handle @identity {
+		reverse_proxy identity:8080
+	}
+
+	handle {
+		root * /srv
+		try_files {path} {path}/ {path}.html /404.html
+		file_server
+	}
+}

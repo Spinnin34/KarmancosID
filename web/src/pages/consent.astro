@@ -1,0 +1,10 @@
+---
+import Layout from "../layouts/Layout.astro";
+import ConsentForm from "../components/consent/ConsentForm.vue";
+---
+
+<Layout title="Karmancos ID · Permiso de acceso" description="Revisa y aprueba los permisos solicitados por un servicio conectado.">
+  <main class="consent-shell">
+    <ConsentForm client:load />
+  </main>
+</Layout>

@@ -1,0 +1,9 @@
+---
+import AuthSurface from "../components/auth/AuthSurface.astro";
+import RegisterForm from "../components/auth/RegisterForm.vue";
+---
+
+<AuthSurface title="Karmancos ID · Crear cuenta" eyebrow="Tu identidad Karmancos" heading="Empieza aquí" intro="Crea una cuenta para usarla en todos tus sitios conectados.">
+  <RegisterForm client:load />
+  <p class="auth-switch">¿Ya tienes cuenta? <a href="/login">Iniciar sesión</a></p>
+</AuthSurface>

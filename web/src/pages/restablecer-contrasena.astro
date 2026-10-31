@@ -1,0 +1,9 @@
+---
+import AuthSurface from "../components/auth/AuthSurface.astro";
+import AccountActionForm from "../components/auth/AccountActionForm.vue";
+---
+
+<AuthSurface title="Karmancos ID · Nueva contraseña" eyebrow="Recuperación segura" heading="Elige una contraseña nueva" intro="El enlace solo se puede usar una vez y caduca a los 30 minutos.">
+  <AccountActionForm mode="reset" client:load />
+  <p class="auth-switch"><a href="/login">Volver a iniciar sesión</a></p>
+</AuthSurface>

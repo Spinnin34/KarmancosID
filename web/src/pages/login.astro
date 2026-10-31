@@ -1,0 +1,9 @@
+---
+import AuthSurface from "../components/auth/AuthSurface.astro";
+import LoginForm from "../components/auth/LoginForm.vue";
+---
+
+<AuthSurface title="Karmancos ID · Iniciar sesión" eyebrow="Acceso a tu cuenta" heading="Vuelve a entrar" intro="Usa tu cuenta Karmancos ID para continuar.">
+  <LoginForm client:load />
+  <p class="auth-switch">¿Aún no tienes cuenta? <a href="/registro">Crear cuenta</a></p>
+</AuthSurface>

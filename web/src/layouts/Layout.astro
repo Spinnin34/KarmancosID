@@ -1,0 +1,33 @@
+---
+import "../index.css";
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description = "Una cuenta Karmancos para todos tus proyectos." } = Astro.props;
+---
+
+<!doctype html>
+<html lang="es" data-palette="my-design-system" data-theme="my-design-system" data-balsa-adapt>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0f1012" />
+    <meta name="description" content={description} />
+    <meta name="generator" content={Astro.generator} />
+    <link rel="icon" type="image/png" href="/images/karmancos-id-mark.png" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <slot />
+    <script>
+      import { createDesignThemeStore } from "@/theme/theme-store";
+      import { myDesignSystemTheme } from "@/themes/my-design-system";
+
+      const themeStore = createDesignThemeStore({ themes: [myDesignSystemTheme] });
+      themeStore.selectTheme(myDesignSystemTheme);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+/backend/data/
+/backend/target/
+/backend/secrets/
+/web/node_modules/
+/web/dist/
+/web/.astro/
+/web/.vercel/
+/web/.env
+/web/.env.*
+!.env.example
+*.pem
+*.key
