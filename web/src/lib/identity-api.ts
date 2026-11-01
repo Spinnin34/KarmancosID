@@ -1,3 +1,5 @@
+import { isPreviewMode } from "./preview-mode";
+
 type IdentityRequestBody = BodyInit | Record<string, unknown> | null;
 
 export interface IdentityRequestInit extends Omit<RequestInit, "body"> {
@@ -13,8 +15,10 @@ export class IdentityApiError extends Error {
 
 let csrfToken: string | undefined;
 let csrfRequest: Promise<string> | undefined;
+const PREVIEW_CSRF_TOKEN = "karmancos-local-preview-csrf";
 
 export async function getIdentityCsrfToken(force = false): Promise<string> {
+  if (import.meta.env.DEV && isPreviewMode()) return PREVIEW_CSRF_TOKEN;
   if (force) csrfToken = undefined;
   if (csrfToken) return csrfToken;
   if (!csrfRequest) {
@@ -34,6 +38,18 @@ export async function getIdentityCsrfToken(force = false): Promise<string> {
 
 export async function identityApi<T>(path: string, init: IdentityRequestInit = {}): Promise<T> {
   const method = (init.method || "GET").toUpperCase();
+  if (import.meta.env.DEV && isPreviewMode()) {
+    const { PreviewApiError, handlePreviewRequest } = await import("./preview-api");
+    try {
+      return await handlePreviewRequest(path, { ...init, method }) as T;
+    } catch (cause) {
+      if (cause instanceof PreviewApiError) {
+        throw new IdentityApiError(cause.message, cause.status);
+      }
+      throw cause;
+    }
+  }
+
   const headers = new Headers(init.headers);
   let body: BodyInit | null | undefined;
   const sourceBody = init.body;

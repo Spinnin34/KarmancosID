@@ -109,15 +109,15 @@ function formatDate(value: string) {
                 </div>
               </div>
             </th>
-            <td><Badge variant="soft" :color="user.active ? 'success' : 'destructive'">{{ user.active ? "Activa" : "Bloqueada" }}</Badge></td>
-            <td><Badge variant="outline" color="secondary">{{ user.role === "ADMIN" ? "Admin" : "Usuario" }}</Badge></td>
-            <td>{{ formatDate(user.createdAt) }}</td>
-            <td>
+            <td data-label="Acceso"><Badge variant="soft" :color="user.active ? 'success' : 'destructive'">{{ user.active ? "Activa" : "Bloqueada" }}</Badge></td>
+            <td data-label="Rol"><Badge variant="outline" color="secondary">{{ user.role === "ADMIN" ? "Admin" : "Usuario" }}</Badge></td>
+            <td data-label="Alta">{{ formatDate(user.createdAt) }}</td>
+            <td data-label="Perfil">
               <Button variant="outline" size="sm" type="button" :disabled="user.email === currentUserEmail" @click="emit('edit', user)">
                 {{ user.email === currentUserEmail ? "Mi cuenta" : "Editar" }}
               </Button>
             </td>
-            <td>
+            <td data-label="Acciones">
               <div class="table-actions">
                 <Button
                   variant="outline"

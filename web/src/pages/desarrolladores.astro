@@ -15,11 +15,9 @@ export const prerender = true;
       <p class="story-kicker">INTEGRACIÓN DE APLICACIONES</p>
       <h1>Una identidad segura para tu producto.</h1>
       <p>Conecta tu aplicación con OpenID Connect. Revisamos cada integración, sus dominios y permisos antes de activar el cliente.</p>
-      <ul><li>Authorization Code con PKCE `S256`</li><li>URI de retorno exacta y HTTPS</li><li>Ventana emergente con SDK web y alternativa de redirección</li><li>Consentimiento visible y permisos revocables por la persona usuaria</li></ul>
+      <ul><li>Authorization Code con PKCE <code>S256</code></li><li>URI de retorno exacta y HTTPS</li><li>Ventana emergente con SDK web y alternativa de redirección</li><li>Consentimiento visible y permisos revocables por la persona usuaria</li></ul>
     </section>
     <section class="developer-request" aria-labelledby="request-heading">
-      <h2 id="request-heading">Solicitar acceso</h2>
-      <p>Cuéntanos qué hace tu servicio y qué datos necesita. La solicitud no crea credenciales automáticamente.</p>
       <ApplicationRequestForm client:load />
     </section>
     <footer class="developer-footer"><a href="/.well-known/openid-configuration">Descubrimiento OIDC</a><a href="https://openid.net/specs/openid-connect-discovery-1_0.html">Especificación OpenID Connect</a></footer>

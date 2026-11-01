@@ -1,0 +1,14 @@
+---
+import Layout from "../layouts/Layout.astro";
+import PreviewCatalog from "../components/preview/PreviewCatalog.vue";
+
+export const prerender = false;
+
+if (!import.meta.env.DEV) {
+  return new Response(null, { status: 404, statusText: "Not Found" });
+}
+---
+
+<Layout title="Karmancos ID · Vista previa local" description="Catálogo local de pantallas para revisar el diseño de Karmancos ID.">
+  <PreviewCatalog client:load />
+</Layout>

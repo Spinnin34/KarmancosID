@@ -32,6 +32,12 @@ npm run dev
 
 Completa `web/.env` con credenciales de una base aislada y claves de desarrollo. No uses secretos ni datos de producción. Consulta [despliegue](docs/DEPLOYMENT.md) para generar claves y preparar índices.
 
+## Vista previa de diseño
+
+Con el servidor local en marcha, abre `/preview` para recorrer las pantallas con datos ficticios. El catálogo incluye los flujos de acceso y MFA, la cuenta y todas las secciones de administración.
+
+El modo se activa con `?preview=1` y se conserva en la pestaña. Los cambios se simulan en memoria y se descartan al recargar; la barra superior permite volver al catálogo o salir. `/preview` devuelve 404 en producción.
+
 ## Calidad
 
 Desde `web/`:

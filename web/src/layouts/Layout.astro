@@ -1,5 +1,6 @@
 ---
 import "../index.css";
+import PreviewToolbar from "../components/preview/PreviewToolbar.vue";
 
 interface Props {
   title: string;
@@ -10,7 +11,7 @@ const { title, description = "Una cuenta Karmancos para todos tus proyectos." } 
 ---
 
 <!doctype html>
-<html lang="es" data-palette="my-design-system" data-theme="my-design-system" data-balsa-adapt>
+<html lang="es" data-palette="my-design-system" data-theme="my-design-system" data-balsa-adapt data-preview-allowed={import.meta.env.DEV ? "true" : "false"}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -18,9 +19,25 @@ const { title, description = "Una cuenta Karmancos para todos tus proyectos." } 
     <meta name="description" content={description} />
     <meta name="generator" content={Astro.generator} />
     <link rel="icon" type="image/png" href="/images/karmancos-id-mark.png" />
+    <script is:inline>
+      (() => {
+        const root = document.documentElement;
+        if (root.dataset.previewAllowed !== "true") return;
+        const requested = new URLSearchParams(window.location.search).get("preview") === "1";
+        try {
+          if (requested) window.sessionStorage.setItem("karmancos-id-preview", "1");
+          if (requested || window.sessionStorage.getItem("karmancos-id-preview") === "1") {
+            root.dataset.previewActive = "true";
+          }
+        } catch {
+          if (requested) root.dataset.previewActive = "true";
+        }
+      })();
+    </script>
     <title>{title}</title>
   </head>
   <body>
+    {import.meta.env.DEV && <PreviewToolbar client:load />}
     <slot />
     <script>
       import { createDesignThemeStore } from "@/theme/theme-store";

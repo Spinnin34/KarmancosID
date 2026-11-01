@@ -5,6 +5,7 @@ import Button from "@/components/ui/Button.vue";
 import Input from "@/components/ui/Input.vue";
 import InputOTP from "@/components/ui/InputOTP.vue";
 import { identityApi } from "@/lib/identity-api";
+import { isPreviewMode } from "@/lib/preview-mode";
 
 const identifier = ref("");
 const password = ref("");
@@ -22,6 +23,7 @@ onMounted(() => {
   } else if (query.get("created") === "1") {
     notice.value = "Cuenta creada. Ya puedes iniciar sesión.";
   }
+  if (isPreviewMode() && query.get("preview_state") === "mfa") stage.value = "mfa";
   if (window.location.pathname === "/login") {
     identityApi<{ requested?: boolean; name?: string; domain?: string }>("/api/auth/continue")
       .then((context) => {
@@ -114,7 +116,6 @@ async function verifyMfa() {
           required
         />
       </div>
-      <p class="login-recovery-link login-fields-wide"><a href="/recuperar-cuenta">¿Tienes un código de recuperación?</a></p>
       <div class="login-field">
         <Input
           id="login-password"
@@ -126,6 +127,7 @@ async function verifyMfa() {
           required
         />
       </div>
+      <p class="login-recovery-link login-fields-wide"><a href="/recuperar-cuenta">¿Tienes un código de recuperación?</a></p>
       <p v-if="notice" class="inline-notice login-fields-wide" role="status">{{ notice }}</p>
       <p v-if="message" class="form-message login-fields-wide" role="alert">{{ message }}</p>
       <Button class="form-action login-fields-wide" variant="solid" size="lg" type="submit" :loading="loading">
@@ -143,6 +145,7 @@ async function verifyMfa() {
         v-model="factorCode"
         label="Código de seis cifras"
         :length="6"
+        size="sm"
         grouped
         variant="outline"
         required

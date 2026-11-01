@@ -4,6 +4,7 @@ import Button from "@/components/ui/Button.vue";
 import Collapsible from "@/components/ui/Collapsible.vue";
 import InputOTP from "@/components/ui/InputOTP.vue";
 import { IdentityApiError, identityApi } from "@/lib/identity-api";
+import { isPreviewMode } from "@/lib/preview-mode";
 
 const secret = ref("");
 const uri = ref("");
@@ -85,6 +86,10 @@ function continueToAdmin() {
   window.sessionStorage.removeItem("karmancos-admin-mfa-next");
   window.location.assign(next.startsWith("/") && !next.startsWith("//") ? next : "/admin");
 }
+
+function keepPreviewLinkLocal(event: MouseEvent) {
+  if (isPreviewMode()) event.preventDefault();
+}
 </script>
 
 <template>
@@ -137,7 +142,7 @@ function continueToAdmin() {
             <span class="mfa-secret-label">Clave de configuración</span>
             <code>{{ secret }}</code>
             <p class="mfa-manual-instruction">En la aplicación, elige «Introducir una clave de configuración» y selecciona «Basada en tiempo».</p>
-            <a class="mfa-uri-link" :href="uri">Abrir en una aplicación compatible</a>
+            <a class="mfa-uri-link" :href="uri" :aria-disabled="isPreviewMode() || undefined" @click="keepPreviewLinkLocal">Abrir en una aplicación compatible</a>
           </div>
         </Collapsible>
       </div>
@@ -148,6 +153,7 @@ function continueToAdmin() {
           v-model="code"
           label="Código de seis cifras"
           :length="6"
+          size="sm"
           :disabled="!secret || loading"
           grouped
           variant="outline"

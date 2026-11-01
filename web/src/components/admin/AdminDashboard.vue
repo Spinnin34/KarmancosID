@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { LayoutDashboard, FileText, AppWindow, Users, Monitor, History, ChevronRight, ArrowUpRight, ShieldCheck, Plus } from "@lucide/vue";
 import Button from "@/components/ui/Button.vue";
 import Badge from "@/components/ui/Badge.vue";
 import Input from "@/components/ui/Input.vue";
@@ -29,13 +30,13 @@ type Application = {
 };
 type CurrentUser = { id: string; email: string; displayName: string; role: string };
 
-const sections: { id: SectionId; title: string }[] = [
-  { id: "overview", title: "Resumen" },
-  { id: "applications", title: "Solicitudes" },
-  { id: "clients", title: "Sitios conectados" },
-  { id: "users", title: "Cuentas" },
-  { id: "sessions", title: "Sesiones" },
-  { id: "activity", title: "Actividad" }
+const sections = [
+  { id: "overview", title: "Resumen", icon: LayoutDashboard },
+  { id: "applications", title: "Solicitudes", icon: FileText },
+  { id: "clients", title: "Sitios conectados", icon: AppWindow },
+  { id: "users", title: "Cuentas", icon: Users },
+  { id: "sessions", title: "Sesiones", icon: Monitor },
+  { id: "activity", title: "Actividad", icon: History }
 ];
 const activeSection = ref<SectionId>("overview");
 const loading = ref(true);
@@ -71,6 +72,15 @@ const clientTypeOptions = [
 ];
 
 const sectionTitle = computed(() => sections.find((section) => section.id === activeSection.value)?.title ?? "Resumen");
+const sectionDescription = computed(() => ({
+  overview: "Una visión de las cuentas, servicios y accesos de tu organización.",
+  applications: "Revisa las aplicaciones que quieren conectar con Karmancos ID.",
+  clients: "Gestiona los servicios que utilizan tu proveedor de identidad.",
+  users: "Administra los perfiles y el acceso de cada persona.",
+  sessions: "Consulta y controla los accesos activos a la plataforma.",
+  activity: "Todos los cambios importantes, en un mismo lugar."
+})[activeSection.value]);
+const activityActors = computed(() => new Set(activity.value.map((event) => event.actor)).size);
 const timelineEvents = computed(() => activity.value.map((event) => ({
   id: event.id,
   actor: event.actor,
@@ -352,6 +362,7 @@ onBeforeUnmount(() => {
         <span class="brand-mark" aria-hidden="true"><img src="/images/karmancos-id-mark.png" alt="" /></span>
         <span class="brand-name">KARMANCOS<span>ID</span></span>
       </a>
+      <p class="admin-navigation-label">Espacio de trabajo</p>
       <nav aria-label="Administración de identidad">
         <Link
           v-for="section in sections"
@@ -361,19 +372,25 @@ onBeforeUnmount(() => {
           color="secondary"
           size="sm"
           class="nav-button"
+          :prefix-icon="section.icon"
           :aria-current="activeSection === section.id ? 'page' : undefined"
         >
           {{ section.title }}
         </Link>
       </nav>
-      <p class="admin-sidebar-note">Proteger cada dominio empieza por registrar sus URL de retorno exactas.</p>
+      <div class="admin-sidebar-bottom">
+        <div class="admin-security-note"><ShieldCheck :size="19" :stroke-width="1.5" /><span>Centro de identidad<strong>Karmancos ID</strong></span></div>
+        <Link href="/cuenta#profile" variant="text" color="secondary" size="sm" class="admin-sidebar-profile">
+          <span class="admin-profile-avatar">{{ initials(currentUser?.displayName || 'Karmancos') }}</span>
+          <span><strong>{{ currentUser?.displayName || 'Mi cuenta' }}</strong><small>Administración</small></span><ArrowUpRight :size="15" />
+        </Link>
+      </div>
     </aside>
 
     <div class="admin-workspace">
       <header class="admin-topbar">
         <div>
-          <small>Centro de identidad / Administración</small>
-          <strong>{{ sectionTitle }}</strong>
+          <span class="admin-breadcrumb">Administración <ChevronRight :size="13" /> <strong>{{ sectionTitle }}</strong></span>
         </div>
         <div class="table-actions">
           <Link class="admin-account-link" href="/cuenta#profile" variant="text" color="secondary" size="sm">Mi cuenta</Link>
@@ -389,20 +406,19 @@ onBeforeUnmount(() => {
         <template v-else>
           <div class="admin-heading-row">
             <div>
-              <p class="admin-section-kicker">KARMANCOS ID · CONTROL</p>
               <h1>{{ sectionTitle }}</h1>
-              <p class="admin-subtitle">Gestiona los accesos y clientes que usan tu identidad central.</p>
+              <p class="admin-subtitle">{{ sectionDescription }}</p>
             </div>
             <Button v-if="activeSection === 'clients'" variant="solid" size="md" type="button" @click="focusClientName">
-              Registrar sitio
+              <Plus :size="16" /> Registrar sitio
             </Button>
           </div>
 
-          <div v-if="activeSection === 'overview'">
+          <div v-if="activeSection === 'overview'" class="admin-overview">
             <div class="metric-strip" aria-label="Estado actual">
-              <div class="metric"><span>Cuentas</span><strong>{{ overview.accounts }}</strong></div>
-              <div class="metric"><span>Clientes OIDC</span><strong>{{ overview.clients }}</strong></div>
-              <div class="metric"><span>Sesiones activas</span><strong>{{ overview.activeSessions }}</strong></div>
+              <div class="metric"><span class="metric-icon"><Users :size="20" :stroke-width="1.5" /></span><span>Cuentas</span><strong>{{ overview.accounts }}</strong><small>Identidades registradas</small></div>
+              <div class="metric"><span class="metric-icon"><AppWindow :size="20" :stroke-width="1.5" /></span><span>Clientes OIDC</span><strong>{{ overview.clients }}</strong><small>Servicios conectados</small></div>
+              <div class="metric"><span class="metric-icon"><Monitor :size="20" :stroke-width="1.5" /></span><span>Sesiones activas</span><strong>{{ overview.activeSessions }}</strong><small>Accesos en este momento</small></div>
             </div>
             <div class="admin-columns">
               <section class="admin-section">
@@ -410,7 +426,7 @@ onBeforeUnmount(() => {
                 <div v-if="clients.length" class="table-wrap">
                   <Table caption="Servicios conectados a Karmancos ID" variant="surface" density="compact" :column-count="4" hover>
                     <template #header><thead><tr><th scope="col">Servicio</th><th scope="col">Tipo</th><th scope="col">Retornos</th><th scope="col">Creado</th></tr></thead></template>
-                    <tbody><tr v-for="client in clients.slice(0, 5)" :key="client.id"><th scope="row"><div class="table-cell-main"><strong>{{ client.name }}</strong><small>{{ client.clientId }}</small></div></th><td><Badge variant="soft" :color="client.clientType === 'public' ? 'info' : 'accent'">{{ client.clientType === 'public' ? 'Público' : 'Confidencial' }}</Badge></td><td>{{ client.redirectUris.length }}</td><td>{{ formatDate(client.createdAt) }}</td></tr></tbody>
+                    <tbody><tr v-for="client in clients.slice(0, 5)" :key="client.id"><th scope="row"><div class="table-cell-main"><strong>{{ client.name }}</strong><small>{{ client.clientId }}</small></div></th><td data-label="Tipo"><Badge variant="soft" :color="client.clientType === 'public' ? 'info' : 'accent'">{{ client.clientType === 'public' ? 'Público' : 'Confidencial' }}</Badge></td><td data-label="Retornos">{{ client.redirectUris.length }}</td><td data-label="Creado">{{ formatDate(client.createdAt) }}</td></tr></tbody>
                   </Table>
                 </div>
                 <div v-else class="empty-state">Aún no hay sitios conectados. Registra el primer cliente OIDC.</div>
@@ -429,7 +445,7 @@ onBeforeUnmount(() => {
           </div>
 
           <section v-else-if="activeSection === 'applications'" class="admin-section">
-            <div class="admin-section-heading"><div><h2>Solicitudes de integración</h2><p>Revisa el servicio y sus URL antes de aprobar. Aprobar no activa acceso: después hay que registrar el cliente.</p></div><Badge variant="soft" color="info">{{ applications.filter((item) => item.status === 'PENDING').length }} pendientes</Badge></div>
+            <div class="admin-section-heading"><div><h2>Solicitudes de integración</h2><p>Revisa el servicio y sus URL antes de aprobar. Aprobar no activa acceso: después hay que registrar el cliente.</p></div><Badge variant="soft" color="info">{{ applications.filter((item) => item.status === 'PENDING').length }} por revisar</Badge></div>
             <div v-if="applications.length" class="application-review-list">
               <article v-for="application in applications" :key="application.id" class="application-review-card">
                 <div class="admin-section-heading">
@@ -461,9 +477,9 @@ onBeforeUnmount(() => {
                   <tbody>
                     <tr v-for="client in clients" :key="client.id">
                       <th scope="row"><div class="table-cell-main"><strong>{{ client.name }}</strong><small>{{ client.redirectUris[0] }}</small></div></th>
-                      <td><code>{{ client.clientId }}</code></td>
-                      <td><Badge variant="soft" :color="client.clientType === 'public' ? 'info' : 'accent'">{{ client.clientType === 'public' ? 'Público' : 'Confidencial' }}</Badge></td>
-                      <td><Button variant="outline" color="destructive" size="sm" type="button" @click="deleteClient(client)">Eliminar</Button></td>
+                      <td data-label="Identificador"><code>{{ client.clientId }}</code></td>
+                      <td data-label="Tipo"><Badge variant="soft" :color="client.clientType === 'public' ? 'info' : 'accent'">{{ client.clientType === 'public' ? 'Público' : 'Confidencial' }}</Badge></td>
+                      <td data-label="Acción"><Button variant="outline" color="destructive" size="sm" type="button" @click="deleteClient(client)">Eliminar</Button></td>
                     </tr>
                   </tbody>
                 </Table>
@@ -504,16 +520,24 @@ onBeforeUnmount(() => {
             <div v-if="sessions.length" class="table-wrap">
               <Table caption="Sesiones activas de Karmancos ID" variant="surface" density="compact" :column-count="4" hover>
                 <template #header><thead><tr><th scope="col">Cuenta</th><th scope="col">Inicio</th><th scope="col">Última actividad</th><th scope="col">Acción</th></tr></thead></template>
-                <tbody><tr v-for="session in sessions" :key="session.reference"><th scope="row">{{ session.email || 'Cuenta sin índice' }}</th><td>{{ formatDate(session.createdAt) }}</td><td>{{ formatDate(session.lastAccessedAt) }}</td><td><Button variant="outline" color="destructive" size="sm" type="button" @click="revokeSession(session)">Cerrar sesión</Button></td></tr></tbody>
+                <tbody><tr v-for="session in sessions" :key="session.reference"><th scope="row">{{ session.email || 'Cuenta sin índice' }}</th><td data-label="Inicio">{{ formatDate(session.createdAt) }}</td><td data-label="Última actividad">{{ formatDate(session.lastAccessedAt) }}</td><td data-label="Acción"><Button variant="outline" color="destructive" size="sm" type="button" @click="revokeSession(session)">Cerrar sesión</Button></td></tr></tbody>
               </Table>
             </div>
             <div v-else class="empty-state">No hay sesiones activas para mostrar.</div>
           </section>
 
-          <section v-else-if="activeSection === 'activity'" class="admin-section">
-            <div class="admin-section-heading"><div><h2>Actividad reciente</h2><p>Registro de cambios de cuenta, clientes y sesiones.</p></div></div>
-            <ActivityTimelineCard v-if="timelineEvents.length" title="Registro de actividad" description="Las contraseñas y los secretos nunca se guardan en este historial." :events="timelineEvents" shadow="none" />
-            <div v-else class="empty-state">Todavía no hay actividad registrada.</div>
+          <section v-else-if="activeSection === 'activity'" class="admin-activity-layout">
+            <div class="activity-feed">
+              <ActivityTimelineCard v-if="timelineEvents.length" title="Registro de actividad" description="Cambios de cuenta, clientes y sesiones." :events="timelineEvents" shadow="none" />
+              <div v-else class="empty-state">Todavía no hay actividad registrada.</div>
+            </div>
+            <aside class="activity-context">
+              <span class="activity-context-icon"><History :size="25" :stroke-width="1.3" /></span>
+              <h2>La historia de tu plataforma</h2>
+              <p>Consulta quién hizo cada cambio y cuándo ocurrió.</p>
+              <dl><div><dt>Eventos registrados</dt><dd>{{ activity.length }}</dd></div><div><dt>Personas con actividad</dt><dd>{{ activityActors }}</dd></div></dl>
+              <div class="activity-privacy"><ShieldCheck :size="17" /><p>Las contraseñas y los secretos nunca se guardan en este historial.</p></div>
+            </aside>
           </section>
         </template>
       </main>

@@ -362,13 +362,15 @@ function formatDate(value: string) {
         <section class="account-identity-card" aria-label="Resumen de la cuenta">
           <Avatar :src="user.picture || undefined" :label="`Foto de perfil de ${user.displayName}`" :fallback="initials" size="lg" shape="rounded" loading="eager" class="account-avatar" />
           <div class="account-identity-copy">
-            <span class="account-identity-label">CUENTA KARMANCOS ID</span>
+            <span class="account-identity-label">TU KARMANCOS ID</span>
             <div class="account-identity-heading">
               <h2>{{ user.displayName }}</h2>
-              <Badge variant="soft" color="success">Cuenta activa</Badge>
             </div>
-            <p>@{{ user.username }} <span aria-hidden="true">·</span> {{ user.email }} <Badge v-if="user.emailVerified" variant="soft" color="success">Correo verificado</Badge><Badge v-else variant="soft" color="warning">Correo no verificado</Badge></p>
+            <p class="account-handle">@{{ user.username }}</p>
+            <p class="account-identity-email">{{ user.email }}</p>
+            <div class="account-identity-status"><Badge variant="soft" color="success">Cuenta activa</Badge><Badge v-if="user.emailVerified" variant="outline" color="secondary">Correo verificado</Badge><Badge v-else variant="outline" color="secondary">Correo no verificado</Badge></div>
           </div>
+          <div class="account-identity-footer"><ShieldCheck :size="18" :stroke-width="1.5" /><span>Una identidad.<br />Todos tus servicios.</span></div>
         </section>
 
         <Tabs
@@ -402,7 +404,7 @@ function formatDate(value: string) {
                   <input ref="pictureInput" class="sr-only" type="file" accept="image/jpeg,image/png,.jpg,.jpeg,.png" aria-label="Seleccionar foto de perfil" @change="selectPicture" />
                   <p v-if="pictureError" class="form-message" role="alert">{{ pictureError }}</p>
                   <p v-if="pictureMessage" class="account-success-message" role="status">{{ pictureMessage }}</p>
-                  <p class="account-profile-picture-hint">JPG o PNG · Máximo 2 MB · Se optimiza de forma segura al guardar</p>
+                  <p class="account-profile-picture-hint">JPG o PNG · Máximo 2 MB</p>
                 </div>
               </section>
               <form class="account-form-grid" @submit.prevent="saveProfile">
