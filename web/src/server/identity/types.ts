@@ -55,6 +55,7 @@ export interface OAuthClient {
   _id: string;
   clientId: string;
   clientSecret?: string;
+  clientSecretEncrypted?: string;
   clientName: string;
   clientAuthenticationMethods: string[];
   authorizationGrantTypes: string[];

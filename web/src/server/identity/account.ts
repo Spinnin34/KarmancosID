@@ -12,6 +12,7 @@ import { normalizeEmail, randomToken, sessionReference, validateBackchannelLogou
 import { HttpError, type IdentityUser, type OAuthClient } from "./types";
 import { adminRecoveryEndpoint } from "./account-recovery";
 import { hashPassword, verifyPassword } from "./password";
+import { decryptClientSecret, encryptClientSecret } from "./client-secret";
 
 export async function accountEndpoint(request: Request, path: string): Promise<Response | null> {
   const method = request.method.toUpperCase();
@@ -229,9 +230,11 @@ async function adminEndpoint(request: Request, path: string, context: Awaited<Re
     if (!new Set(["public", "confidential"]).has(clientType)) throw new HttpError(400, "Elige un cliente público o confidencial.");
     const clientId = `kmc_${randomToken(18)}`;
     const secret = clientType === "confidential" ? randomToken(32) : null;
+    const encryptedSecret = secret ? encryptClientSecret(secret) : undefined;
     const client: OAuthClient = {
       _id: randomUUID(), clientId, clientName: name,
       ...(secret ? { clientSecret: await bcrypt.hash(secret, 12) } : {}),
+      ...(encryptedSecret ? { clientSecretEncrypted: encryptedSecret } : {}),
       clientAuthenticationMethods: secret ? ["client_secret_basic"] : ["none"],
       authorizationGrantTypes: secret ? ["authorization_code", "refresh_token"] : ["authorization_code"],
       redirectUris: redirects, postLogoutRedirectUris: postLogout,
@@ -243,7 +246,63 @@ async function adminEndpoint(request: Request, path: string, context: Awaited<Re
     };
     await collections.clients.insertOne(client);
     await logAudit(context!.user.email, "client.created", name);
-    return json({ clientId, clientSecret: secret, note: "Guarda el secreto ahora. No volverá a mostrarse." }, 201);
+    return json({ id: client._id, clientId, clientSecret: secret, note: secret ? "El secreto se guarda cifrado y se puede recuperar desde este panel." : "Este cliente público no tiene secreto." }, 201);
+  }
+
+  const clientSecretMatch = path.match(/^\/api\/admin\/clients\/([^/]+)\/secret$/);
+  if (method === "POST" && clientSecretMatch) {
+    requireCsrf(request, context); authorize();
+    const input = await readJson(request);
+    const clientId = decodeURIComponent(clientSecretMatch[1]);
+    const client = await collections.clients.findOne({ _id: clientId });
+    if (!client) throw new HttpError(404, "No se encontró ese sitio.");
+    if (client.clientAuthenticationMethods.includes("none")) throw new HttpError(409, "Los clientes públicos no usan secreto.");
+
+    let secret = typeof client.clientSecretEncrypted === "string" && input.rotate !== true
+      ? decryptClientSecret(client.clientSecretEncrypted)
+      : "";
+    if (!secret) {
+      secret = randomToken(32);
+      const clientSecret = await bcrypt.hash(secret, 12);
+      const clientSecretEncrypted = encryptClientSecret(secret);
+      await collections.clients.updateOne({ _id: client._id }, { $set: { clientSecret, clientSecretEncrypted } });
+      await logAudit(context!.user.email, "client.secret_rotated", client.clientName);
+    } else {
+      await logAudit(context!.user.email, "client.secret_viewed", client.clientName);
+    }
+    return json({ secret });
+  }
+
+  const editClient = path.match(/^\/api\/admin\/clients\/([^/]+)$/);
+  if (method === "PATCH" && editClient) {
+    requireCsrf(request, context); authorize();
+    const input = await readJson(request);
+    const clientId = decodeURIComponent(editClient[1]);
+    const client = await collections.clients.findOne({ _id: clientId });
+    if (!client) throw new HttpError(404, "No se encontró ese sitio.");
+    const name = requireString(input.name, "name", 100).trim();
+    const redirectUris = validateRedirectUris(input.redirectUris);
+    const allowedOrigins = validateOrigins(input.allowedOrigins);
+    const postLogoutRedirectUris = input.postLogoutRedirectUris == null
+      || (Array.isArray(input.postLogoutRedirectUris) && input.postLogoutRedirectUris.length === 0)
+      ? []
+      : validateRedirectUris(input.postLogoutRedirectUris);
+    const rawBackchannelLogoutUri = typeof input.backchannelLogoutUri === "string" ? input.backchannelLogoutUri.trim() : "";
+    const update = {
+      clientName: name,
+      redirectUris,
+      allowedOrigins,
+      postLogoutRedirectUris,
+      ...(rawBackchannelLogoutUri ? { backchannelLogoutUri: validateBackchannelLogoutUri(rawBackchannelLogoutUri) } : {}),
+    };
+    await collections.clients.updateOne(
+      { _id: client._id },
+      rawBackchannelLogoutUri
+        ? { $set: update }
+        : { $set: update, $unset: { backchannelLogoutUri: "" } },
+    );
+    await logAudit(context!.user.email, "client.updated", name);
+    return json({ message: "Datos del sitio actualizados." });
   }
 
   const backchannelLogoutMatch = path.match(/^\/api\/admin\/clients\/([^/]+)\/backchannel-logout$/);
@@ -386,6 +445,7 @@ function clientView(client: OAuthClient) {
     postLogoutRedirectUris: client.postLogoutRedirectUris ?? [],
     backchannelLogoutUri: client.backchannelLogoutUri ?? "",
     scopes: client.scopes ?? [],
+    secretAvailable: Boolean(client.clientSecretEncrypted),
     createdAt: client.clientIdIssuedAt,
   };
 }

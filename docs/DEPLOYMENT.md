@@ -30,6 +30,7 @@ La guía de [regiones de funciones de Vercel](https://vercel.com/docs/functions/
 | Variable | Uso |
 | --- | --- |
 | `KARMANCOS_ISSUER` | Emisor OIDC de ejecución; usa el mismo origen que `PUBLIC_IDENTITY_ISSUER`. |
+| `KARMANCOS_CLIENT_SECRET_ENCRYPTION_KEY_B64` | Clave dedicada opcional de 32 bytes en Base64 para cifrar secretos de clientes. Si falta, se deriva mediante HKDF del HMAC estable. Mantén estable la clave configurada; perderla obliga a rotar los secretos afectados. |
 | `MONGODB_DATABASE` | Nombre de base. Si falta, se obtiene de la URI o se usa `karmancosid`. |
 | `KARMANCOS_SECURE_COOKIES` | Mantén `true` en Vercel. Solo se desactiva para desarrollo local HTTP. |
 | `KARMANCOS_SESSION_COOKIE_NAME` | Nombre de cookie de sesión; por defecto `KARMANCOSID`. |

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { LayoutDashboard, FileText, AppWindow, Users, Monitor, History, ChevronRight, ArrowUpRight, ShieldCheck, Plus } from "@lucide/vue";
+import { LayoutDashboard, FileText, AppWindow, Users, Monitor, History, ChevronRight, ArrowUpRight, ShieldCheck, Plus, Copy, Eye, EyeOff, Pencil, KeyRound } from "@lucide/vue";
 import Button from "@/components/ui/Button.vue";
 import Badge from "@/components/ui/Badge.vue";
 import Input from "@/components/ui/Input.vue";
@@ -19,7 +19,7 @@ type Overview = { accounts: number; clients: number; activeSessions: number };
 type Client = {
   id: string; clientId: string; name: string; clientType: "public" | "confidential";
   redirectUris: string[]; allowedOrigins: string[]; postLogoutRedirectUris: string[];
-  backchannelLogoutUri: string; scopes: string[]; createdAt: string;
+  backchannelLogoutUri: string; scopes: string[]; secretAvailable: boolean; createdAt: string;
 };
 type User = AdminUser;
 type Session = { reference: string; email: string | null; createdAt: string; lastAccessedAt: string };
@@ -60,16 +60,23 @@ const userProfileError = ref("");
 const profileDraft = ref({ username: "", firstName: "", lastName: "", secondLastName: "", email: "" });
 const clientName = ref("");
 const clientType = ref("confidential");
+const clientQuery = ref("");
 const redirectUrisText = ref("");
 const postLogoutUrisText = ref("");
 const backchannelLogoutUriText = ref("");
-const backchannelLogoutUriDrafts = ref<Record<string, string>>({});
-const savingBackchannelClientId = ref("");
-const backchannelLogoutError = ref("");
 const allowedOriginsText = ref("");
 const clientError = ref("");
-const newSecret = ref("");
-const copiedSecret = ref(false);
+const clientNotice = ref("");
+const clientSecretCache = ref<Record<string, string>>({});
+const visibleClientSecrets = ref<Record<string, boolean>>({});
+const clientSecretBusy = ref<Record<string, boolean>>({});
+const clientSecretMessages = ref<Record<string, string>>({});
+const copiedClientSecretId = ref("");
+const editingClient = ref<Client | null>(null);
+const clientDialogOpen = ref(false);
+const savingClient = ref(false);
+const clientEditError = ref("");
+const clientEditDraft = ref({ name: "", redirectUris: "", allowedOrigins: "", postLogoutRedirectUris: "", backchannelLogoutUri: "" });
 const reviewingApplicationId = ref("");
 
 const clientTypeOptions = [
@@ -86,6 +93,18 @@ const sectionDescription = computed(() => ({
   sessions: "Consulta y controla los accesos activos a la plataforma.",
   activity: "Todos los cambios importantes, en un mismo lugar."
 })[activeSection.value]);
+const filteredClients = computed(() => {
+  const query = clientQuery.value.trim().toLocaleLowerCase("es");
+  if (!query) return clients.value;
+  return clients.value.filter((client) => [
+    client.name,
+    client.clientId,
+    ...client.redirectUris,
+    ...client.allowedOrigins,
+    ...client.postLogoutRedirectUris,
+    client.backchannelLogoutUri,
+  ].join(" ").toLocaleLowerCase("es").includes(query));
+});
 const activityActors = computed(() => new Set(activity.value.map((event) => event.actor)).size);
 const timelineEvents = computed(() => activity.value.map((event) => ({
   id: event.id,
@@ -151,7 +170,6 @@ async function loadDashboard() {
     currentUser.value = me;
     overview.value = overviewData;
     clients.value = clientData;
-    backchannelLogoutUriDrafts.value = Object.fromEntries(clientData.map((client) => [client.id, client.backchannelLogoutUri ?? ""]));
     applications.value = applicationData;
     users.value = userData;
     sessions.value = sessionData;
@@ -198,7 +216,7 @@ function redirectList(value: string) {
 
 async function createClient() {
   clientError.value = "";
-  newSecret.value = "";
+  clientNotice.value = "";
   const redirectUris = redirectList(redirectUrisText.value);
   if (!clientName.value.trim() || redirectUris.length === 0) {
     clientError.value = "Escribe un nombre y al menos una URL de retorno.";
@@ -206,7 +224,7 @@ async function createClient() {
   }
   creatingClient.value = true;
   try {
-    const created = await api<{ clientId: string; clientSecret: string | null; note: string }>("/api/admin/clients", {
+    const created = await api<{ id: string; clientId: string; clientSecret: string | null; note: string }>("/api/admin/clients", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -218,7 +236,10 @@ async function createClient() {
         backchannelLogoutUri: backchannelLogoutUriText.value.trim()
       })
     });
-    newSecret.value = created.clientSecret ?? "";
+    if (created.clientSecret) clientSecretCache.value[created.id] = created.clientSecret;
+    clientNotice.value = created.clientSecret
+      ? "Sitio registrado. Su secreto queda oculto en la tarjeta y puedes mostrarlo o copiarlo cuando lo necesites."
+      : "Sitio público registrado. No utiliza secreto de cliente.";
     clientName.value = "";
     redirectUrisText.value = "";
     postLogoutUrisText.value = "";
@@ -232,24 +253,131 @@ async function createClient() {
   }
 }
 
-function updateBackchannelLogoutUriDraft(clientId: string, value: string) {
-  backchannelLogoutUriDrafts.value[clientId] = value;
+function openClientEditor(client: Client) {
+  editingClient.value = client;
+  clientEditDraft.value = {
+    name: client.name,
+    redirectUris: client.redirectUris.join("\n"),
+    allowedOrigins: client.allowedOrigins.join("\n"),
+    postLogoutRedirectUris: client.postLogoutRedirectUris.join("\n"),
+    backchannelLogoutUri: client.backchannelLogoutUri,
+  };
+  clientEditError.value = "";
+  clientDialogOpen.value = true;
 }
 
-async function saveBackchannelLogoutUri(client: Client) {
-  backchannelLogoutError.value = "";
-  savingBackchannelClientId.value = client.id;
+async function saveClient() {
+  if (!editingClient.value) return;
+  clientEditError.value = "";
+  const redirectUris = redirectList(clientEditDraft.value.redirectUris);
+  if (!clientEditDraft.value.name.trim()) {
+    clientEditError.value = "Escribe un nombre para el sitio.";
+    return;
+  }
+  if (redirectUris.length === 0) {
+    clientEditError.value = "Añade al menos una URL de retorno.";
+    return;
+  }
+  savingClient.value = true;
   try {
-    await api(`/api/admin/clients/${encodeURIComponent(client.id)}/backchannel-logout`, {
+    await api(`/api/admin/clients/${encodeURIComponent(editingClient.value.id)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ uri: backchannelLogoutUriDrafts.value[client.id] ?? "" })
+      body: JSON.stringify({
+        name: clientEditDraft.value.name,
+        redirectUris,
+        allowedOrigins: redirectList(clientEditDraft.value.allowedOrigins),
+        postLogoutRedirectUris: redirectList(clientEditDraft.value.postLogoutRedirectUris),
+        backchannelLogoutUri: clientEditDraft.value.backchannelLogoutUri.trim(),
+      }),
     });
+    clientNotice.value = `Cambios guardados para ${clientEditDraft.value.name.trim()}.`;
+    clientDialogOpen.value = false;
     await loadDashboard();
   } catch (cause) {
-    backchannelLogoutError.value = cause instanceof Error ? cause.message : "No se pudo guardar el endpoint de cierre de sesión.";
+    clientEditError.value = cause instanceof Error ? cause.message : "No se pudieron guardar los datos del sitio.";
   } finally {
-    savingBackchannelClientId.value = "";
+    savingClient.value = false;
+  }
+}
+
+function clientSecretText(client: Client) {
+  if (!visibleClientSecrets.value[client.id]) return "••••••••••••••••••••";
+  return clientSecretCache.value[client.id] ?? "";
+}
+
+async function loadClientSecret(client: Client, rotate = false) {
+  const result = await api<{ secret: string }>(`/api/admin/clients/${encodeURIComponent(client.id)}/secret`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(rotate ? { rotate: true } : {}),
+  });
+  clientSecretCache.value[client.id] = result.secret;
+  return result.secret;
+}
+
+async function toggleClientSecret(client: Client) {
+  if (visibleClientSecrets.value[client.id]) {
+    visibleClientSecrets.value[client.id] = false;
+    delete clientSecretCache.value[client.id];
+    return;
+  }
+  clientSecretBusy.value[client.id] = true;
+  clientSecretMessages.value[client.id] = "";
+  try {
+    if (!clientSecretCache.value[client.id]) await loadClientSecret(client);
+    visibleClientSecrets.value[client.id] = true;
+  } catch (cause) {
+    clientSecretMessages.value[client.id] = cause instanceof Error ? cause.message : "No se pudo mostrar el secreto.";
+  } finally {
+    clientSecretBusy.value[client.id] = false;
+  }
+}
+
+async function copyClientSecret(client: Client) {
+  clientSecretBusy.value[client.id] = true;
+  clientSecretMessages.value[client.id] = "";
+  try {
+    const secret = clientSecretCache.value[client.id] ?? await loadClientSecret(client);
+    await navigator.clipboard.writeText(secret);
+    copiedClientSecretId.value = client.id;
+    clientSecretMessages.value[client.id] = "Secreto copiado al portapapeles.";
+    window.setTimeout(() => {
+      if (copiedClientSecretId.value === client.id) copiedClientSecretId.value = "";
+    }, 1800);
+    if (!visibleClientSecrets.value[client.id]) delete clientSecretCache.value[client.id];
+  } catch (cause) {
+    clientSecretMessages.value[client.id] = cause instanceof Error ? cause.message : "No se pudo copiar el secreto.";
+  } finally {
+    clientSecretBusy.value[client.id] = false;
+  }
+}
+
+async function rotateClientSecret(client: Client) {
+  const detail = client.secretAvailable
+    ? "El secreto actual dejará de funcionar inmediatamente."
+    : "El secreto anterior no se puede recuperar y dejará de funcionar.";
+  if (!window.confirm(`¿Generar un secreto nuevo para ${client.name}? ${detail} Actualiza después la credencial en el servidor del sitio.`)) return;
+  clientSecretBusy.value[client.id] = true;
+  clientSecretMessages.value[client.id] = "";
+  try {
+    await loadClientSecret(client, true);
+    visibleClientSecrets.value[client.id] = false;
+    clientSecretMessages.value[client.id] = "Secreto renovado. Cópialo y actualiza la configuración del sitio.";
+    await loadDashboard();
+  } catch (cause) {
+    clientSecretMessages.value[client.id] = cause instanceof Error ? cause.message : "No se pudo renovar el secreto.";
+  } finally {
+    clientSecretBusy.value[client.id] = false;
+  }
+}
+
+async function copyClientId(client: Client) {
+  try {
+    await navigator.clipboard.writeText(client.clientId);
+    clientNotice.value = `Identificador copiado: ${client.clientId}`;
+  } catch {
+    clientNotice.value = "El navegador no permitió copiar el identificador.";
   }
 }
 
@@ -257,6 +385,8 @@ async function deleteClient(client: Client) {
   if (!window.confirm(`Eliminar “${client.name}” y revocar sus autorizaciones?`)) return;
   try {
     await api<void>(`/api/admin/clients/${encodeURIComponent(client.id)}`, { method: "DELETE" });
+    delete clientSecretCache.value[client.id];
+    delete visibleClientSecrets.value[client.id];
     await loadDashboard();
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : "No se pudo eliminar el cliente.";
@@ -321,15 +451,6 @@ async function revokeSession(session: Session) {
   }
 }
 
-async function copySecret() {
-  try {
-    await navigator.clipboard.writeText(newSecret.value);
-    copiedSecret.value = true;
-  } catch {
-    clientError.value = "El navegador no permitió copiarlo. Selecciona el secreto y guárdalo ahora.";
-  }
-}
-
 async function signOut() {
   try {
     await api<void>("/api/auth/logout", { method: "POST" });
@@ -383,6 +504,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener("popstate", syncSectionFromLocation);
   window.removeEventListener("hashchange", syncSectionFromLocation);
+  clientSecretCache.value = {};
 });
 </script>
 
@@ -500,30 +622,64 @@ onBeforeUnmount(() => {
             <div v-else class="empty-state">Todavía no se han recibido solicitudes de integración.</div>
           </section>
 
-          <section v-else-if="activeSection === 'clients'" class="admin-columns">
-            <div class="admin-section">
-              <div class="admin-section-heading"><div><h2>Clientes registrados</h2><p>La URL de retorno debe coincidir exactamente con la de tu aplicación.</p></div></div>
-              <div v-if="clients.length" class="table-wrap">
-                <Table caption="Clientes registrados en Karmancos ID" variant="surface" density="compact" :column-count="5" hover>
-                  <template #header><thead><tr><th scope="col">Servicio</th><th scope="col">Identificador</th><th scope="col">Tipo</th><th scope="col">Endpoint de logout interno</th><th scope="col">Acción</th></tr></thead></template>
-                  <tbody>
-                    <tr v-for="client in clients" :key="client.id">
-                      <th scope="row"><div class="table-cell-main"><strong>{{ client.name }}</strong><small>{{ client.redirectUris[0] }}</small></div></th>
-                      <td data-label="Identificador"><code>{{ client.clientId }}</code></td>
-                      <td data-label="Tipo"><Badge variant="soft" :color="client.clientType === 'public' ? 'info' : 'accent'">{{ client.clientType === 'public' ? 'Público' : 'Confidencial' }}</Badge></td>
-                      <td data-label="Endpoint de logout interno"><div class="client-logout-uri-editor"><Input :id="`backchannel-logout-${client.id}`" :model-value="backchannelLogoutUriDrafts[client.id] ?? client.backchannelLogoutUri" :label="`Endpoint de cierre de sesión de ${client.name}`" type="url" placeholder="https://app.example.com/auth/backchannel-logout" @update:model-value="(value) => updateBackchannelLogoutUriDraft(client.id, value)" /><Button variant="outline" size="sm" type="button" :loading="savingBackchannelClientId === client.id" @click="saveBackchannelLogoutUri(client)">Guardar</Button></div></td>
-                      <td data-label="Acción"><Button variant="outline" color="destructive" size="sm" type="button" @click="deleteClient(client)">Eliminar</Button></td>
-                    </tr>
-                  </tbody>
-                </Table>
+          <section v-else-if="activeSection === 'clients'" class="admin-columns client-management">
+            <div class="admin-section client-directory">
+              <div class="client-directory-heading">
+                <div><h2>Sitios registrados</h2><p>Credenciales y direcciones de confianza para cada integración.</p></div>
+                <Input id="client-search" v-model="clientQuery" label="Buscar sitios" placeholder="Nombre, ID o dominio" />
               </div>
-              <div v-else class="empty-state">Sin clientes. Añade tu primera web o aplicación conectada.</div>
-              <p v-if="backchannelLogoutError" class="form-message" role="alert">{{ backchannelLogoutError }}</p>
-              <p class="admin-form-hint">El servicio conectado debe implementar este endpoint OIDC para cerrar su sesión al recibir el Logout Token. Puedes dejarlo vacío para quitar la notificación.</p>
+              <p v-if="clientNotice" class="client-notice" role="status">{{ clientNotice }}</p>
+              <div v-if="filteredClients.length" class="client-card-list">
+                <article v-for="client in filteredClients" :key="client.id" class="client-card">
+                  <header class="client-card-header">
+                    <div class="client-card-title">
+                      <span class="client-card-icon" aria-hidden="true"><AppWindow :size="20" :stroke-width="1.7" /></span>
+                      <div><h3>{{ client.name }}</h3><p>{{ formatDate(client.createdAt) }}</p></div>
+                    </div>
+                    <div class="client-card-actions">
+                      <Badge variant="soft" :color="client.clientType === 'public' ? 'info' : 'accent'">{{ client.clientType === 'public' ? 'Público' : 'Confidencial' }}</Badge>
+                      <Button variant="outline" size="sm" type="button" :prefix-icon="Pencil" @click="openClientEditor(client)">Editar</Button>
+                      <Button variant="outline" color="destructive" size="sm" type="button" @click="deleteClient(client)">Eliminar</Button>
+                    </div>
+                  </header>
+
+                  <div class="client-id-row">
+                    <span>ID del cliente</span><code>{{ client.clientId }}</code>
+                    <Button variant="outline" size="sm" type="button" :prefix-icon="Copy" :aria-label="`Copiar ID de ${client.name}`" @click="copyClientId(client)">Copiar ID</Button>
+                  </div>
+
+                  <dl class="client-detail-grid">
+                    <div><dt>URL de retorno</dt><dd v-for="uri in client.redirectUris" :key="uri"><code>{{ uri }}</code></dd></div>
+                    <div><dt>Orígenes web</dt><dd v-for="origin in client.allowedOrigins" :key="origin"><code>{{ origin }}</code></dd><dd v-if="!client.allowedOrigins.length" class="client-detail-empty">No se usan desde el navegador</dd></div>
+                    <div><dt>URL tras cerrar sesión</dt><dd v-for="uri in client.postLogoutRedirectUris" :key="uri"><code>{{ uri }}</code></dd><dd v-if="!client.postLogoutRedirectUris.length" class="client-detail-empty">No configurada</dd></div>
+                    <div><dt>Cierre en este sitio</dt><dd v-if="client.backchannelLogoutUri"><code>{{ client.backchannelLogoutUri }}</code></dd><dd v-else class="client-detail-empty">Endpoint no configurado</dd></div>
+                  </dl>
+
+                  <div v-if="client.clientType === 'confidential'" class="client-secret-panel">
+                    <div class="client-secret-heading">
+                      <div><strong>Secreto del cliente</strong><small>{{ client.secretAvailable ? 'Guardado cifrado · solo se muestra bajo demanda' : 'El secreto antiguo no se puede recuperar' }}</small></div>
+                      <Badge variant="soft" :color="client.secretAvailable ? 'success' : 'warning'">{{ client.secretAvailable ? 'Disponible' : 'Requiere rotación' }}</Badge>
+                    </div>
+                    <div class="client-secret-controls">
+                      <code class="client-secret-value">{{ clientSecretText(client) }}</code>
+                      <div class="table-actions">
+                        <Button v-if="client.secretAvailable" variant="outline" size="sm" type="button" :prefix-icon="visibleClientSecrets[client.id] ? EyeOff : Eye" :loading="clientSecretBusy[client.id]" :aria-label="visibleClientSecrets[client.id] ? `Ocultar secreto de ${client.name}` : `Mostrar secreto de ${client.name}`" @click="toggleClientSecret(client)">{{ visibleClientSecrets[client.id] ? 'Ocultar' : 'Mostrar' }}</Button>
+                        <Button v-if="client.secretAvailable" variant="outline" size="sm" type="button" :prefix-icon="Copy" :loading="clientSecretBusy[client.id]" @click="copyClientSecret(client)">{{ copiedClientSecretId === client.id ? 'Copiado' : 'Copiar' }}</Button>
+                        <Button variant="outline" size="sm" type="button" :prefix-icon="KeyRound" :loading="clientSecretBusy[client.id]" @click="rotateClientSecret(client)">{{ client.secretAvailable ? 'Renovar secreto' : 'Generar secreto' }}</Button>
+                      </div>
+                    </div>
+                    <p v-if="!client.secretAvailable" class="client-secret-help">Al generar uno nuevo, el anterior dejará de funcionar. Actualiza la credencial en el servidor del sitio.</p>
+                    <p v-if="clientSecretMessages[client.id]" class="client-secret-message" role="status">{{ clientSecretMessages[client.id] }}</p>
+                  </div>
+                </article>
+              </div>
+              <div v-else-if="clients.length" class="empty-state">No hay sitios que coincidan con esa búsqueda.</div>
+              <div v-else class="empty-state">Sin sitios conectados. Registra tu primera integración.</div>
+              <p class="client-directory-hint">Las URL se validan antes de guardarse. Cada sitio debe usar su propio ID y mantener su secreto únicamente en su servidor.</p>
             </div>
 
             <form id="new-client-form" class="admin-form-panel" @submit.prevent="createClient">
-              <div><h3>Registrar un sitio</h3><p>Crea un cliente OpenID Connect para un dominio concreto.</p></div>
+              <div><p class="admin-section-kicker">NUEVA INTEGRACIÓN</p><h3>Registrar un sitio</h3><p>Crea credenciales OpenID Connect para un dominio concreto.</p></div>
               <Input id="client-name" v-model="clientName" label="Nombre del servicio" placeholder="Mi sitio Karmancos" required />
               <Select id="client-type" v-model="clientType" label="Tipo de aplicación" :options="clientTypeOptions" hint="Las apps públicas siempre requieren PKCE." />
               <Textarea id="redirect-uris" v-model="redirectUrisText" label="URL de retorno" :rows="3" :max-height="180" resizable="vertical" placeholder="https://mi-sitio.com/auth/callback" hint="Una URL exacta por línea. HTTPS es obligatorio fuera de localhost." required />
@@ -532,11 +688,6 @@ onBeforeUnmount(() => {
               <Input id="client-backchannel-logout" v-model="backchannelLogoutUriText" label="Endpoint de cierre de sesión interno · opcional" type="url" placeholder="https://mi-sitio.com/auth/backchannel-logout" hint="Debe validar el Logout Token y eliminar las sesiones locales del usuario." />
               <p v-if="clientError" class="form-message" role="alert">{{ clientError }}</p>
               <Button class="form-action" variant="solid" type="submit" :loading="creatingClient">Crear cliente</Button>
-              <div v-if="newSecret" class="secret-reveal" role="status">
-                <p>Guarda el secreto ahora. Karmancos ID no lo volverá a mostrar.</p>
-                <code>{{ newSecret }}</code>
-                <Button variant="outline" size="sm" type="button" @click="copySecret">{{ copiedSecret ? 'Copiado' : 'Copiar secreto' }}</Button>
-              </div>
             </form>
           </section>
 
@@ -602,6 +753,33 @@ onBeforeUnmount(() => {
         <template #footer="{ close }">
           <Button variant="outline" type="button" @click="close">Cancelar</Button>
           <Button variant="solid" type="submit" form="admin-user-edit-form" :loading="savingUser">Guardar cambios</Button>
+        </template>
+      </Modal>
+
+      <Modal
+        v-if="editingClient"
+        id="admin-client-edit"
+        v-model="clientDialogOpen"
+        title="Editar sitio conectado"
+        :description="`Actualiza el nombre y las direcciones de confianza de ${editingClient.name}. El ID y el tipo de cliente se mantienen.`"
+        presentation="dialog"
+        variant="surface"
+        size="lg"
+        close-label="Cerrar edición del sitio"
+      >
+        <template #eyebrow><p class="admin-section-kicker">CONFIGURACIÓN DEL SITIO</p></template>
+        <div class="admin-dialog-intro"><p><strong>ID del cliente:</strong> <code>{{ editingClient.clientId }}</code></p><p>Usa URLs exactas y comprueba los cambios con el responsable del sitio antes de guardarlos.</p></div>
+        <form id="admin-client-edit-form" class="client-edit-form" @submit.prevent="saveClient">
+          <Input id="edit-client-name" v-model="clientEditDraft.name" label="Nombre del sitio" maxlength="100" required />
+          <Textarea id="edit-client-redirects" v-model="clientEditDraft.redirectUris" label="URL de retorno" :rows="3" :max-height="170" placeholder="https://sitio.com/auth/callback" hint="Una URL exacta por línea. Debe coincidir con la configuración del sitio." required />
+          <Textarea id="edit-client-origins" v-model="clientEditDraft.allowedOrigins" label="Orígenes web autorizados" :rows="2" :max-height="130" placeholder="https://sitio.com" hint="Solo para SDK de navegador. Una URL de origen por línea." />
+          <Textarea id="edit-client-post-logout" v-model="clientEditDraft.postLogoutRedirectUris" label="URL tras cerrar sesión" :rows="2" :max-height="130" placeholder="https://sitio.com/" hint="Opcional. Una URL exacta por línea." />
+          <Input id="edit-client-backchannel" v-model="clientEditDraft.backchannelLogoutUri" label="Endpoint para cerrar sesión en este sitio" type="url" placeholder="https://sitio.com/auth/backchannel-logout" hint="Opcional. El sitio debe validar el Logout Token para borrar su sesión local." />
+          <p v-if="clientEditError" class="form-message" role="alert">{{ clientEditError }}</p>
+        </form>
+        <template #footer="{ close }">
+          <Button variant="outline" type="button" @click="close">Cancelar</Button>
+          <Button variant="solid" type="submit" form="admin-client-edit-form" :loading="savingClient">Guardar cambios</Button>
         </template>
       </Modal>
     </div>
