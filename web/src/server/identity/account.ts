@@ -3,7 +3,7 @@ import sharp, { type Metadata, type Sharp } from "sharp";
 import { randomUUID } from "node:crypto";
 import { getStore } from "./storage";
 import { activeSessionFilter, addSessionCookies, clearAuthCookies, loadSession, requireAuthenticated, requireCsrf, requireAdmin } from "./session";
-import { removeGrantForClientAndPrincipal, removeGrantsForClient } from "./client-repository";
+import { invalidateClientAuthorizations, removeGrantForClientAndPrincipal, removeGrantsForClient } from "./client-repository";
 import { notifyClientOfUserLogout, revokeIdentityAccess } from "./logout";
 import { consumeRateLimit, logAudit } from "./operations";
 import { adminUserResponse, pictureUrl, updateUserIdentity } from "./user-repository";
@@ -288,21 +288,42 @@ async function adminEndpoint(request: Request, path: string, context: Awaited<Re
       ? []
       : validateRedirectUris(input.postLogoutRedirectUris);
     const rawBackchannelLogoutUri = typeof input.backchannelLogoutUri === "string" ? input.backchannelLogoutUri.trim() : "";
+    const currentClientType = client.clientAuthenticationMethods.includes("none") ? "public" : "confidential";
+    const nextClientType = input.clientType == null ? currentClientType : input.clientType;
+    if (nextClientType !== "public" && nextClientType !== "confidential") {
+      throw new HttpError(400, "Elige un cliente público o confidencial.");
+    }
+    const clientTypeChanged = nextClientType !== currentClientType;
+    const newSecret = clientTypeChanged && nextClientType === "confidential" ? randomToken(32) : undefined;
     const update = {
       clientName: name,
       redirectUris,
       allowedOrigins,
       postLogoutRedirectUris,
       ...(rawBackchannelLogoutUri ? { backchannelLogoutUri: validateBackchannelLogoutUri(rawBackchannelLogoutUri) } : {}),
+      ...(clientTypeChanged ? {
+        clientAuthenticationMethods: nextClientType === "public" ? ["none"] : ["client_secret_basic"],
+        authorizationGrantTypes: nextClientType === "public" ? ["authorization_code"] : ["authorization_code", "refresh_token"],
+        requireProofKey: true,
+      } : {}),
+      ...(newSecret ? {
+        clientSecret: await bcrypt.hash(newSecret, 12),
+        clientSecretEncrypted: encryptClientSecret(newSecret),
+      } : {}),
     };
+    const unset: Record<string, ""> = {};
+    if (!rawBackchannelLogoutUri) unset.backchannelLogoutUri = "";
+    if (clientTypeChanged && nextClientType === "public") {
+      unset.clientSecret = "";
+      unset.clientSecretEncrypted = "";
+    }
     await collections.clients.updateOne(
       { _id: client._id },
-      rawBackchannelLogoutUri
-        ? { $set: update }
-        : { $set: update, $unset: { backchannelLogoutUri: "" } },
+      { $set: update, ...(Object.keys(unset).length ? { $unset: unset } : {}) },
     );
-    await logAudit(context!.user.email, "client.updated", name);
-    return json({ message: "Datos del sitio actualizados." });
+    if (clientTypeChanged) await invalidateClientAuthorizations(client._id);
+    await logAudit(context!.user.email, clientTypeChanged ? "client.type_changed" : "client.updated", name);
+    return json({ message: "Datos del sitio actualizados.", clientType: nextClientType, secretAvailable: nextClientType === "confidential" });
   }
 
   const backchannelLogoutMatch = path.match(/^\/api\/admin\/clients\/([^/]+)\/backchannel-logout$/);

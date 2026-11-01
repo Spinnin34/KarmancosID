@@ -76,7 +76,14 @@ const editingClient = ref<Client | null>(null);
 const clientDialogOpen = ref(false);
 const savingClient = ref(false);
 const clientEditError = ref("");
-const clientEditDraft = ref({ name: "", redirectUris: "", allowedOrigins: "", postLogoutRedirectUris: "", backchannelLogoutUri: "" });
+const clientEditDraft = ref<{
+  name: string;
+  clientType: Client["clientType"];
+  redirectUris: string;
+  allowedOrigins: string;
+  postLogoutRedirectUris: string;
+  backchannelLogoutUri: string;
+}>({ name: "", clientType: "confidential", redirectUris: "", allowedOrigins: "", postLogoutRedirectUris: "", backchannelLogoutUri: "" });
 const reviewingApplicationId = ref("");
 
 const clientTypeOptions = [
@@ -257,6 +264,7 @@ function openClientEditor(client: Client) {
   editingClient.value = client;
   clientEditDraft.value = {
     name: client.name,
+    clientType: client.clientType,
     redirectUris: client.redirectUris.join("\n"),
     allowedOrigins: client.allowedOrigins.join("\n"),
     postLogoutRedirectUris: client.postLogoutRedirectUris.join("\n"),
@@ -269,6 +277,7 @@ function openClientEditor(client: Client) {
 async function saveClient() {
   if (!editingClient.value) return;
   clientEditError.value = "";
+  const clientTypeChanged = clientEditDraft.value.clientType !== editingClient.value.clientType;
   const redirectUris = redirectList(clientEditDraft.value.redirectUris);
   if (!clientEditDraft.value.name.trim()) {
     clientEditError.value = "Escribe un nombre para el sitio.";
@@ -278,6 +287,12 @@ async function saveClient() {
     clientEditError.value = "Añade al menos una URL de retorno.";
     return;
   }
+  if (clientTypeChanged) {
+    const typeChange = clientEditDraft.value.clientType === "confidential"
+      ? "Se generará un secreto nuevo y se invalidarán los códigos y tokens de renovación activos. Configúralo en el servidor del sitio; nunca lo incluyas en código del navegador."
+      : "Se eliminará el secreto y se invalidarán los códigos y tokens de renovación activos. El sitio deberá usar PKCE sin secreto.";
+    if (!window.confirm(`¿Cambiar el tipo de ${editingClient.value.name}? ${typeChange}`)) return;
+  }
   savingClient.value = true;
   try {
     await api(`/api/admin/clients/${encodeURIComponent(editingClient.value.id)}`, {
@@ -285,13 +300,24 @@ async function saveClient() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: clientEditDraft.value.name,
+        clientType: clientEditDraft.value.clientType,
         redirectUris,
         allowedOrigins: redirectList(clientEditDraft.value.allowedOrigins),
         postLogoutRedirectUris: redirectList(clientEditDraft.value.postLogoutRedirectUris),
         backchannelLogoutUri: clientEditDraft.value.backchannelLogoutUri.trim(),
       }),
     });
-    clientNotice.value = `Cambios guardados para ${clientEditDraft.value.name.trim()}.`;
+    if (clientTypeChanged) {
+      delete clientSecretCache.value[editingClient.value.id];
+      delete visibleClientSecrets.value[editingClient.value.id];
+      delete clientSecretMessages.value[editingClient.value.id];
+      if (copiedClientSecretId.value === editingClient.value.id) copiedClientSecretId.value = "";
+      clientNotice.value = clientEditDraft.value.clientType === "confidential"
+        ? `Tipo cambiado a Confidencial para ${clientEditDraft.value.name.trim()}. Ya puedes copiar el secreto nuevo desde su tarjeta.`
+        : `Tipo cambiado a Público para ${clientEditDraft.value.name.trim()}. El secreto anterior ya no es válido.`;
+    } else {
+      clientNotice.value = `Cambios guardados para ${clientEditDraft.value.name.trim()}.`;
+    }
     clientDialogOpen.value = false;
     await loadDashboard();
   } catch (cause) {
@@ -473,6 +499,8 @@ function actionLabel(action: string) {
     "account.password_changed": "cambió su contraseña",
     "sessions.others_revoked": "cerró otras sesiones de",
     "client.created": "registró el servicio",
+    "client.updated": "actualizó el servicio",
+    "client.type_changed": "cambió el tipo del servicio",
     "client.deleted": "eliminó el servicio",
     "session.revoked": "cerró una sesión"
   };
@@ -761,7 +789,7 @@ onBeforeUnmount(() => {
         id="admin-client-edit"
         v-model="clientDialogOpen"
         title="Editar sitio conectado"
-        :description="`Actualiza el nombre y las direcciones de confianza de ${editingClient.name}. El ID y el tipo de cliente se mantienen.`"
+        :description="`Actualiza los datos de ${editingClient.name}. Cambiar el tipo renueva las credenciales y elimina códigos y tokens de renovación activos. Los tokens de acceso emitidos pueden durar hasta 5 minutos.`"
         presentation="dialog"
         variant="surface"
         size="lg"
@@ -771,6 +799,12 @@ onBeforeUnmount(() => {
         <div class="admin-dialog-intro"><p><strong>ID del cliente:</strong> <code>{{ editingClient.clientId }}</code></p><p>Usa URLs exactas y comprueba los cambios con el responsable del sitio antes de guardarlos.</p></div>
         <form id="admin-client-edit-form" class="client-edit-form" @submit.prevent="saveClient">
           <Input id="edit-client-name" v-model="clientEditDraft.name" label="Nombre del sitio" maxlength="100" required />
+          <Select id="edit-client-type" v-model="clientEditDraft.clientType" label="Tipo de aplicación" :options="clientTypeOptions" hint="Público para navegador o app nativa; Confidencial para un servidor privado." />
+          <p v-if="clientEditDraft.clientType !== editingClient.clientType" class="client-type-warning" role="status">
+            <template v-if="clientEditDraft.clientType === 'confidential'">Se generará un secreto nuevo. Guárdalo solo en el servidor del sitio; nunca lo pongas en código que se ejecute en el navegador.</template>
+            <template v-else>El secreto se eliminará y el sitio tendrá que autenticarse con PKCE sin secreto.</template>
+            Se invalidarán los códigos y tokens de renovación activos. Los tokens de acceso ya emitidos pueden durar hasta 5 minutos.
+          </p>
           <Textarea id="edit-client-redirects" v-model="clientEditDraft.redirectUris" label="URL de retorno" :rows="3" :max-height="170" placeholder="https://sitio.com/auth/callback" hint="Una URL exacta por línea. Debe coincidir con la configuración del sitio." required />
           <Textarea id="edit-client-origins" v-model="clientEditDraft.allowedOrigins" label="Orígenes web autorizados" :rows="2" :max-height="130" placeholder="https://sitio.com" hint="Solo para SDK de navegador. Una URL de origen por línea." />
           <Textarea id="edit-client-post-logout" v-model="clientEditDraft.postLogoutRedirectUris" label="URL tras cerrar sesión" :rows="2" :max-height="130" placeholder="https://sitio.com/" hint="Opcional. Una URL exacta por línea." />

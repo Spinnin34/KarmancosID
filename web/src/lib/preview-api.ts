@@ -18,6 +18,8 @@ type PreviewClient = {
   redirectUris: string[];
   allowedOrigins: string[];
   postLogoutRedirectUris: string[];
+  backchannelLogoutUri: string;
+  secretAvailable: boolean;
   scopes: string[];
   createdAt: string;
 };
@@ -60,6 +62,8 @@ let clients: PreviewClient[] = [
     redirectUris: ["https://atlas.example.test/auth/callback"],
     allowedOrigins: ["https://atlas.example.test"],
     postLogoutRedirectUris: ["https://atlas.example.test/"],
+    backchannelLogoutUri: "",
+    secretAvailable: false,
     scopes: ["openid", "profile", "email"],
     createdAt: yesterday,
   },
@@ -71,6 +75,8 @@ let clients: PreviewClient[] = [
     redirectUris: ["https://console.example.test/oidc/callback"],
     allowedOrigins: [],
     postLogoutRedirectUris: [],
+    backchannelLogoutUri: "",
+    secretAvailable: true,
     scopes: ["openid", "profile"],
     createdAt: now,
   },
@@ -296,21 +302,50 @@ export async function handlePreviewRequest(path: string, init: PreviewRequestIni
   if (pathname === "/api/admin/clients" && method === "POST") {
     const name = String(body.name || "Servicio de ejemplo");
     const redirectUris = Array.isArray(body.redirectUris) ? body.redirectUris.map(String) : [];
+    const clientType = body.clientType === "public" ? "public" : "confidential";
     const created: PreviewClient = {
       id: `preview-client-${Date.now()}`,
       clientId: "kmc_preview_only",
       name,
-      clientType: body.clientType === "public" ? "public" : "confidential",
+      clientType,
       redirectUris,
       allowedOrigins: Array.isArray(body.allowedOrigins) ? body.allowedOrigins.map(String) : [],
       postLogoutRedirectUris: Array.isArray(body.postLogoutRedirectUris) ? body.postLogoutRedirectUris.map(String) : [],
+      backchannelLogoutUri: String(body.backchannelLogoutUri || ""),
+      secretAvailable: clientType === "confidential",
       scopes: ["openid", "profile"],
       createdAt: new Date().toISOString(),
     };
     clients = [...clients, created];
-    return { clientId: created.clientId, clientSecret: "preview-only-not-a-valid-secret", note: "Solo dato de ejemplo; no tiene validez." };
+    return { id: created.id, clientId: created.clientId, clientSecret: created.secretAvailable ? "preview-only-not-a-valid-secret" : null, note: "Solo dato de ejemplo; no tiene validez." };
+  }
+  const adminClientSecretMatch = pathname.match(/^\/api\/admin\/clients\/([^/]+)\/secret$/);
+  if (adminClientSecretMatch && method === "POST") {
+    const client = clients.find((entry) => entry.id === decodeURIComponent(adminClientSecretMatch[1]));
+    if (!client) throw new PreviewApiError("No se encontró ese sitio.", 404);
+    if (client.clientType === "public") throw new PreviewApiError("Los clientes públicos no usan secreto.", 409);
+    return { secret: "preview-only-not-a-valid-secret" };
   }
   const adminClientMatch = pathname.match(/^\/api\/admin\/clients\/([^/]+)$/);
+  if (adminClientMatch && method === "PATCH") {
+    const id = decodeURIComponent(adminClientMatch[1]);
+    const existing = clients.find((client) => client.id === id);
+    if (!existing) throw new PreviewApiError("No se encontró ese sitio.", 404);
+    const clientType = body.clientType === "public" || body.clientType === "confidential"
+      ? body.clientType
+      : existing.clientType;
+    clients = clients.map((client) => client.id === id ? {
+      ...client,
+      name: String(body.name || client.name),
+      clientType,
+      redirectUris: Array.isArray(body.redirectUris) ? body.redirectUris.map(String) : client.redirectUris,
+      allowedOrigins: Array.isArray(body.allowedOrigins) ? body.allowedOrigins.map(String) : client.allowedOrigins,
+      postLogoutRedirectUris: Array.isArray(body.postLogoutRedirectUris) ? body.postLogoutRedirectUris.map(String) : client.postLogoutRedirectUris,
+      backchannelLogoutUri: String(body.backchannelLogoutUri || ""),
+      secretAvailable: clientType === "confidential",
+    } : client);
+    return { message: "Vista previa: datos y tipo actualizados en memoria.", clientType, secretAvailable: clientType === "confidential" };
+  }
   if (adminClientMatch && method === "DELETE") {
     clients = clients.filter((client) => client.id !== decodeURIComponent(adminClientMatch[1]));
     return undefined;

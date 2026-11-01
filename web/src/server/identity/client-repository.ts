@@ -11,6 +11,11 @@ export async function removeGrantsForClient(clientId: string) {
   ]);
 }
 
+export async function invalidateClientAuthorizations(clientId: string) {
+  const { collections } = await getStore();
+  await collections.authorizations.deleteMany({ $or: [{ clientId }, { registeredClientId: clientId }] });
+}
+
 export async function removeGrantForClientAndPrincipal(clientId: string, email: string) {
   const { collections } = await getStore();
   const normalized = normalizeEmail(email);

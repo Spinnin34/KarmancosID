@@ -381,6 +381,7 @@ a:hover { color: var(--identity-ink); }
 .client-secret-help,
 .client-secret-message { margin: 0; color: var(--identity-subtle); font-size: 10px; line-height: 1.5; }
 .client-secret-message { color: #d3aeb6; }
+.client-type-warning { margin: 0; padding: 11px 12px; border: 1px solid #47363b; border-left: 2px solid var(--identity-coral); border-radius: 7px; background: #1b191b; color: #e5c6cc; font-size: 11px; line-height: 1.55; }
 .client-directory-hint { margin: 13px 2px 0; color: #74808a; font-size: 10px; line-height: 1.55; }
 .client-edit-form { display: grid; gap: 14px; }
 .client-edit-form .form-message { margin: 0; }
