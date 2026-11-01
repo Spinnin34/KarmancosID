@@ -142,9 +142,20 @@ export async function updateUserIdentity(user: IdentityUser, input: {
 export function rawPicture(user: IdentityUser): Buffer | null {
   if (!user.profilePicture) return null;
   if (Buffer.isBuffer(user.profilePicture)) return user.profilePicture;
-  const value = user.profilePicture as unknown as { buffer?: Uint8Array; value?: Uint8Array | (() => Uint8Array) };
-  if (value.buffer) return Buffer.from(value.buffer);
-  if (typeof value.value === "function") return Buffer.from(value.value());
-  if (value.value) return Buffer.from(value.value);
+  const value = user.profilePicture as unknown as {
+    buffer?: Uint8Array | ArrayBuffer;
+    value?: Uint8Array | ((asRaw?: boolean) => Uint8Array | string);
+  };
+  if (typeof value.value === "function") {
+    const raw = value.value(true);
+    return typeof raw === "string" ? Buffer.from(raw, "binary") : Buffer.from(raw);
+  }
+  if (value.value instanceof Uint8Array) {
+    return Buffer.from(value.value.buffer, value.value.byteOffset, value.value.byteLength);
+  }
+  if (value.buffer instanceof Uint8Array) {
+    return Buffer.from(value.buffer.buffer, value.buffer.byteOffset, value.buffer.byteLength);
+  }
+  if (value.buffer instanceof ArrayBuffer) return Buffer.from(value.buffer);
   return Buffer.from(user.profilePicture as Uint8Array);
 }

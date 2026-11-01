@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { randomToken, sha256, getIssuer, signAccessToken, signIdToken, signingJwks, verifyAccessToken, normalizeEmail, secureEqual } from "./security";
+import { isAuthorizationRequestCurrent } from "./auth-flow";
 import { getStore } from "./storage";
 import { addSessionCookies, clearAuthCookies, loadSession, requireAuthenticated, requireCsrf, saveSession } from "./session";
 import { compareClientSecret, consentId, getClientByClientId } from "./client-repository";
@@ -101,7 +102,7 @@ async function acceptConsent(request: Request): Promise<Response> {
   const form = await readForm(request);
   requireCsrf(request, session, form.get("_csrf") || "");
   const pending = session.session.requestedAuthorization;
-  if (!pending || pending.createdAt < Date.now() - 10 * 60_000) throw new HttpError(400, "La solicitud de acceso ha caducado. Vuelve al servicio e inténtalo otra vez.");
+  if (!isAuthorizationRequestCurrent(pending)) throw new HttpError(400, "La solicitud de acceso ha caducado. Vuelve al servicio e inténtalo otra vez.");
   if (form.get("client_id") !== pending.clientId || form.get("state") !== pending.state) throw new HttpError(400, "La solicitud de acceso no coincide.");
   const selectedScopes = [...new Set(form.getAll("scope").flatMap((value) => value.split(/\s+/)).filter(Boolean))];
   if (!selectedScopes.includes("openid") || selectedScopes.some((scope) => !pending.scopes.includes(scope))) throw new HttpError(400, "Los permisos seleccionados no coinciden con la solicitud.");
@@ -258,9 +259,11 @@ async function userinfo(request: Request) {
     const { collections } = await getStore();
     const record = await collections.authorizations.findOne({ _id: sha256(token), kind: "access_token", expiresAt: { $gt: new Date() } });
     if (!record) throw new Error("inactive token");
-    const user = await collections.users.findOne({ _id: record.userId, active: true });
+    const [user, client] = await Promise.all([
+      collections.users.findOne({ _id: record.userId, active: true }),
+      collections.clients.findOne({ clientId: String(record.clientId) }),
+    ]);
     if (!user) throw new Error("missing user");
-    const client = await collections.clients.findOne({ clientId: String(record.clientId) });
     if (!client) throw new Error("missing client");
     const scopes = Array.isArray(record.scopes) ? record.scopes as string[] : [];
     const claims: Record<string, unknown> = { sub: payload.sub };

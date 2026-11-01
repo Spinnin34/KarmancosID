@@ -1,6 +1,6 @@
 import { getStore } from "./storage";
 import { consumeRateLimit, logAudit } from "./operations";
-import { authorizationPath } from "./auth-flow";
+import { authorizationPath, isAuthorizationRequestCurrent } from "./auth-flow";
 import { addSessionCookies, loadSession, requireCsrf, requirePasswordAuthenticated, rotateSession, saveSession } from "./session";
 import { json, readJson, requireString } from "./http";
 import { createRecoveryCodes, decryptTotpSecret, encryptTotpSecret, normalizeRecoveryCode, createTotpSecret, totpStepForCode, totpUri } from "./totp";
@@ -105,8 +105,9 @@ async function verifyLogin(request: Request): Promise<Response> {
   if (/^\d{6}$/.test(submitted)) {
     const secret = decryptTotpSecret(context.user.mfaTotpSecretEncrypted);
     const step = totpStepForCode(secret, submitted, Date.now());
-    if (step === null || (context.user.mfaLastUsedStep !== undefined && step <= context.user.mfaLastUsedStep)) {
-      throw new HttpError(401, "El código no es válido o ya se ha utilizado.");
+    if (step === null) throw new HttpError(401, "El código no coincide. Comprueba la hora automática de tu dispositivo y vuelve a intentarlo.");
+    if (context.user.mfaLastUsedStep !== undefined && step <= context.user.mfaLastUsedStep) {
+      throw new HttpError(401, "Este código ya se ha utilizado. Espera a que aparezca uno nuevo y vuelve a intentarlo.");
     }
     const consumed = await collections.users.updateOne(
       {
@@ -138,7 +139,7 @@ async function verifyLogin(request: Request): Promise<Response> {
 }
 
 function nextPath(context: Awaited<ReturnType<typeof rotateSession>>): string {
-  if (context.session.requestedAuthorization) return authorizationPath(context.session.requestedAuthorization);
+  if (isAuthorizationRequestCurrent(context.session.requestedAuthorization)) return authorizationPath(context.session.requestedAuthorization);
   return "/admin";
 }
 

@@ -46,7 +46,11 @@ async function submit() {
   try {
     const data = await identityApi<{ next?: string; requiresMfa?: boolean; requiresMfaSetup?: boolean }>("/api/auth/login", {
       method: "POST",
-      body: { identifier: identifier.value.trim(), password: password.value },
+      body: {
+        identifier: identifier.value.trim(),
+        password: password.value,
+        continueAuthorization: window.location.pathname.replace(/\/+$/, "") === "/login",
+      },
     });
     if (data.requiresMfa) {
       stage.value = "mfa";

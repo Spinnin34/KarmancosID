@@ -1,10 +1,10 @@
 import bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
 import { getStore } from "./storage";
-import { addSessionCookies, clearAuthCookies, loadSession, requireAuthenticated, requireCsrf, rotateSession, saveSession, setCsrfCookie, setSessionCookie } from "./session";
+import { addSessionCookies, clearAuthCookies, loadSession, requireAuthenticated, requireCsrf, rotateSession, setCsrfCookie, setSessionCookie } from "./session";
 import { consumeRateLimit, logAudit } from "./operations";
 import { createUser, findUserByEmail, findUserByIdentifier, userResponse } from "./user-repository";
-import { authorizationPath } from "./auth-flow";
+import { authorizationPath, isAuthorizationRequestCurrent } from "./auth-flow";
 import { json, empty, readJson, requireString } from "./http";
 import { normalizeEmail, normalizeIdentifier, safeNextPath, validateIdentity } from "./security";
 import { HttpError } from "./types";
@@ -23,7 +23,7 @@ export async function authEndpoint(request: Request, path: string): Promise<Resp
   if (path === "/api/auth/continue" && method === "GET") {
     const context = await loadSession(request);
     const pending = context?.session.requestedAuthorization;
-    if (!pending) return json({ requested: false, name: "", domain: "" });
+    if (!isAuthorizationRequestCurrent(pending)) return json({ requested: false, name: "", domain: "" });
     const { collections } = await getStore();
     const client = await collections.clients.findOne({ clientId: pending.clientId });
     if (!client) return json({ requested: false, name: "", domain: "" });
@@ -64,6 +64,15 @@ export async function authEndpoint(request: Request, path: string): Promise<Resp
     const input = await readJson(request);
     const identifier = normalizeIdentifier(String(input.identifier ?? input.email ?? ""));
     const password = requireString(input.password, "password", 128);
+    const requestedAuthorization = context?.session.requestedAuthorization;
+    const pendingAuthorization = input.continueAuthorization === true
+      && isAuthorizationRequestCurrent(requestedAuthorization)
+      ? requestedAuthorization
+      : undefined;
+    if (context) {
+      if (pendingAuthorization) context.session.requestedAuthorization = pendingAuthorization;
+      else delete context.session.requestedAuthorization;
+    }
     const rate = await consumeRateLimit(request, "login", identifier, 6, 15 * 60_000);
     if (!rate.allowed) {
       return json({ message: "Demasiados intentos. Espera un poco antes de volver a probar." }, 429, { "Retry-After": String(rate.retryAfterSeconds) });
@@ -77,7 +86,6 @@ export async function authEndpoint(request: Request, path: string): Promise<Resp
     const current = context ?? await loadSession(request, true);
     if (!current) throw new Error("Could not create identity session.");
     const nextContext = await rotateSession(request, current, user);
-    await saveSession(nextContext);
     const headers = new Headers();
     setSessionCookie(headers, nextContext.session._id);
     setCsrfCookie(headers, nextContext.session.csrfToken);
@@ -87,8 +95,8 @@ export async function authEndpoint(request: Request, path: string): Promise<Resp
       }
       return json({ requiresMfaSetup: true, next: "/configurar-2fa" }, 200, headers);
     }
-    const next = nextContext.session.requestedAuthorization
-      ? authorizationPath(nextContext.session.requestedAuthorization)
+    const next = pendingAuthorization
+      ? authorizationPath(pendingAuthorization)
       : "/cuenta";
     await logAudit(user.email, "account.signed_in", user.email);
     return json({ next: safeNextPath(next) }, 200, headers);

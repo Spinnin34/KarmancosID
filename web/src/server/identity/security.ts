@@ -143,7 +143,13 @@ export async function signIdToken(user: IdentityUser, client: OAuthClient, scope
     claims.preferred_username = user.username;
     claims.given_name = user.firstName;
     claims.family_name = [user.lastName, user.secondLastName].filter(Boolean).join(" ");
-    if (user.profilePictureUpdatedAt) claims.picture = `${getIssuer()}/api/public/users/${encodeURIComponent(user._id)}/picture?v=${new Date(user.profilePictureUpdatedAt).getTime()}`;
+    if (user.profilePicture && user.profilePictureContentType && user.profilePictureUpdatedAt) {
+      const pictureUrl = new URL(
+        `/api/public/users/${encodeURIComponent(user._id)}/picture?v=${new Date(user.profilePictureUpdatedAt).getTime()}`,
+        getIssuer(),
+      );
+      claims.picture = pictureUrl.toString();
+    }
   }
   if (scopes.includes("email")) {
     claims.email = user.email;

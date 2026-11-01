@@ -1,5 +1,16 @@
 import type { AuthorizationRequest } from "./types";
 
+export const AUTHORIZATION_REQUEST_LIFETIME_MS = 10 * 60_000;
+
+export function isAuthorizationRequestCurrent(request: AuthorizationRequest | undefined, now = Date.now()): request is AuthorizationRequest {
+  return Boolean(
+    request
+    && Number.isFinite(request.createdAt)
+    && request.createdAt <= now
+    && request.createdAt > now - AUTHORIZATION_REQUEST_LIFETIME_MS,
+  );
+}
+
 export function authorizationPath(request: AuthorizationRequest): string {
   const params = new URLSearchParams({
     client_id: request.clientId,

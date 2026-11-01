@@ -2,8 +2,9 @@ import { randomToken, secureEqual } from "./security";
 import { HttpError, type IdentitySession, type IdentityUser } from "./types";
 import { getStore } from "./storage";
 import { appendCookie } from "./http";
+import { isAuthorizationRequestCurrent } from "./auth-flow";
 
-const SESSION_SECONDS = 30 * 60;
+const SESSION_SECONDS = 30 * 24 * 60 * 60;
 const SESSION_COOKIE = process.env.KARMANCOS_SESSION_COOKIE_NAME || "KARMANCOSID";
 const secureCookie = process.env.KARMANCOS_SECURE_COOKIES !== "false";
 
@@ -66,16 +67,19 @@ export async function loadSession(request: Request, create = false): Promise<Ses
   let isNew = false;
 
   if (session && session.userId) {
-    const user = await collections.users.findOne({ _id: session.userId, active: true });
+    const now = new Date();
+    const [user] = await Promise.all([
+      collections.users.findOne({ _id: session.userId, active: true }),
+      collections.sessions.updateOne({ _id: session._id }, {
+        $set: { lastAccessedAt: now, expiresAt: new Date(now.getTime() + SESSION_SECONDS * 1000) },
+      }),
+    ]);
     if (!user) {
       await collections.sessions.deleteOne({ _id: session._id });
       session = null;
     } else {
-      await collections.sessions.updateOne({ _id: session._id }, {
-        $set: { lastAccessedAt: new Date(), expiresAt: new Date(Date.now() + SESSION_SECONDS * 1000) },
-      });
-      session.lastAccessedAt = new Date();
-      session.expiresAt = new Date(Date.now() + SESSION_SECONDS * 1000);
+      session.lastAccessedAt = now;
+      session.expiresAt = new Date(now.getTime() + SESSION_SECONDS * 1000);
       return rememberSession(request, { session, user, isNew });
     }
   }
@@ -157,12 +161,14 @@ export async function rotateSession(request: Request, context: SessionContext, u
     lastAccessedAt: now,
     expiresAt: new Date(now.getTime() + SESSION_SECONDS * 1000),
     userAgent: request.headers.get("user-agent")?.slice(0, 512),
-    ...(prior.requestedAuthorization ? { requestedAuthorization: prior.requestedAuthorization } : {}),
+    ...(isAuthorizationRequestCurrent(prior.requestedAuthorization) ? { requestedAuthorization: prior.requestedAuthorization } : {}),
     ...(options.mfaVerifiedAt ? { mfaVerifiedAt: options.mfaVerifiedAt } : {}),
   };
   await collections.sessions.insertOne(next);
+  const nextContext = { session: next, user, isNew: true } satisfies SessionContext;
+  rememberSession(request, nextContext);
   await collections.sessions.deleteOne({ _id: prior._id });
-  return { session: next, user, isNew: true } satisfies SessionContext;
+  return nextContext;
 }
 
 export async function saveSession(context: SessionContext) {

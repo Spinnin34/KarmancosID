@@ -13,6 +13,16 @@ import { adminRecoveryEndpoint } from "./account-recovery";
 
 export async function accountEndpoint(request: Request, path: string): Promise<Response | null> {
   const method = request.method.toUpperCase();
+  const accountRoute = (path === "/api/account/profile" && method === "PATCH")
+    || (path === "/api/account/picture" && (method === "POST" || method === "DELETE"))
+    || (path === "/api/account/password" && method === "POST")
+    || (path === "/api/account/sessions" && method === "GET")
+    || (path === "/api/account/apps" && method === "GET")
+    || (path.startsWith("/api/account/apps/") && method === "DELETE")
+    || (path === "/api/account/sessions/revoke-others" && method === "POST")
+    || (path.startsWith("/api/account/sessions/") && method === "DELETE");
+  if (!accountRoute && !path.startsWith("/api/admin/")) return null;
+
   const context = await loadSession(request);
 
   if (path === "/api/account/profile" && method === "PATCH") {
@@ -68,13 +78,19 @@ export async function accountEndpoint(request: Request, path: string): Promise<R
       image = image.rotate().resize({ width: 512, height: 512, fit: "inside", withoutEnlargement: true });
       processed = png ? await image.png({ compressionLevel: 9, palette: true }).toBuffer() : await image.jpeg({ quality: 88, mozjpeg: true }).toBuffer();
     } catch { throw new HttpError(400, "No se pudo procesar la imagen seleccionada."); }
+    const contentType = png ? "image/png" : "image/jpeg";
+    const updatedAt = new Date();
     await collections.users.updateOne({ _id: context.user._id }, { $set: {
-      profilePicture: processed, profilePictureContentType: png ? "image/png" : "image/jpeg", profilePictureUpdatedAt: new Date(),
+      profilePicture: processed, profilePictureContentType: contentType, profilePictureUpdatedAt: updatedAt,
     } });
-    const updated = await collections.users.findOne({ _id: context.user._id });
-    if (!updated) throw new HttpError(404, "No se encontró esa cuenta.");
+    const picture = pictureUrl({
+      ...context.user,
+      profilePicture: processed,
+      profilePictureContentType: contentType,
+      profilePictureUpdatedAt: updatedAt,
+    });
     await logAudit(context.user.email, "account.picture_changed", context.user._id);
-    return json({ message: "Foto de perfil actualizada.", picture: pictureUrl(updated) });
+    return json({ message: "Foto de perfil actualizada.", picture });
   }
 
   if (path === "/api/account/password" && method === "POST") {

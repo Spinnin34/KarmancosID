@@ -27,7 +27,13 @@ export async function publicEndpoint(request: Request, path: string): Promise<Re
     const picture = user ? rawPicture(user) : null;
     if (!user || !picture || !user.profilePictureContentType || !user.profilePictureUpdatedAt) throw new HttpError(404, "No se encontró la foto.");
     const etag = `"${new Date(user.profilePictureUpdatedAt).getTime()}"`;
-    const cache = { "Cache-Control": "public, max-age=300", ETag: etag, "X-Content-Type-Options": "nosniff" };
+    const cache = {
+      "Cache-Control": "public, max-age=300",
+      "Access-Control-Allow-Origin": "*",
+      "Cross-Origin-Resource-Policy": "cross-origin",
+      ETag: etag,
+      "X-Content-Type-Options": "nosniff",
+    };
     const incomingTag = request.headers.get("if-none-match");
     if (incomingTag === etag || incomingTag === `W/${etag}`) return empty(304, cache);
     const imageBytes = new Uint8Array(picture.length);
