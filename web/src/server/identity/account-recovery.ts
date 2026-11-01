@@ -1,11 +1,11 @@
-import bcrypt from "bcryptjs";
 import { getStore } from "./storage";
-import { removeGrantsForPrincipal } from "./client-repository";
+import { revokeIdentityAccess } from "./logout";
 import { consumeRateLimit, logAudit } from "./operations";
 import { clearAuthCookies, loadSession, requireAdmin, requireCsrf, type SessionContext } from "./session";
 import { json, readJson, requireString } from "./http";
-import { normalizeEmail, randomToken, sha256 } from "./security";
+import { randomToken, sha256 } from "./security";
 import { HttpError } from "./types";
+import { hashPassword } from "./password";
 
 const RECOVERY_LIFETIME_MS = 30 * 60_000;
 
@@ -56,14 +56,13 @@ export async function accountRecoveryEndpoint(request: Request, path: string): P
   const user = await collections.users.findOne({ _id: candidate.userId, active: true });
   if (!user) throw new HttpError(400, "El código no es válido o ha caducado.");
 
-  const passwordHash = await bcrypt.hash(newPassword, 12);
+  const passwordHash = await hashPassword(newPassword);
   const consumed = await collections.accountRecoveryTokens.findOneAndDelete({ _id: codeHash, expiresAt: { $gt: new Date() } });
   if (!consumed) throw new HttpError(400, "El código no es válido o ya se ha usado.");
 
   await collections.users.updateOne({ _id: user._id }, { $set: { passwordHash } });
   await Promise.all([
-    collections.sessions.deleteMany({ email: normalizeEmail(user.email) }),
-    removeGrantsForPrincipal(user.email),
+    revokeIdentityAccess(user),
     collections.accountRecoveryTokens.deleteMany({ userId: user._id }),
   ]);
   await logAudit(user.email, "account.password_reset_admin_assisted", user._id);

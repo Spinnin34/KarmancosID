@@ -38,7 +38,7 @@ La guía de [regiones de funciones de Vercel](https://vercel.com/docs/functions/
 
 No existe configuración de SMTP, envío de correo ni verificación por email. No añadas `.env`, claves PEM, contraseñas ni URI privadas al repositorio.
 
-Para cerrar sesiones de aplicaciones conectadas al salir de Karmancos ID, registra un `backchannel_logout_uri` HTTPS exacto en cada cliente. Ese endpoint debe aceptar un `logout_token` firmado como formulario URL-encoded, validar issuer, audience, firma, expiración, `jti` y el evento `http://schemas.openid.net/event/backchannel-logout`, y eliminar la sesión local asociada al `sub` pairwise. El proveedor también revoca los tokens OIDC emitidos al usuario. Sin un endpoint implementado por la aplicación, el proveedor no puede borrar su cookie o sesión local.
+Para cerrar sesiones de aplicaciones conectadas al salir de Karmancos ID, registra un `backchannel_logout_uri` HTTPS exacto con hostname público en cada cliente. El proveedor resuelve el destino y conecta a una dirección pública validada, sin seguir redirecciones. Ese endpoint debe aceptar un `logout_token` firmado como formulario URL-encoded, validar issuer, audience, firma, expiración, `jti` y el evento `http://schemas.openid.net/event/backchannel-logout`, y eliminar la sesión local asociada al `sub` pairwise. El proveedor también revoca los tokens OIDC emitidos al usuario. Sin un endpoint implementado por la aplicación, el proveedor no puede borrar su cookie o sesión local.
 
 ## Generar secretos
 
@@ -67,7 +67,7 @@ $env:MONGODB_DATABASE = "<base de destino>"
 npm run db:indexes
 ```
 
-Ejecuta el comando con un usuario de base que pueda gestionar índices y asegúrate de que la base corresponde al entorno correcto. El script es idempotente. Antes de aplicarlo a una base existente, revisa que no haya duplicados que impidan los índices únicos.
+Ejecuta el comando con un usuario de base que pueda gestionar índices y asegúrate de que la base corresponde al entorno correcto. El script es idempotente; además migra los refresh tokens que sigan vigentes para que no caduquen por inactividad. Antes de aplicarlo a una base existente, revisa que no haya duplicados que impidan los índices únicos.
 
 ## Datos y transición desde Java
 

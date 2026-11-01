@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { randomToken, sha256, getIssuer, signAccessToken, signIdToken, signingJwks, verifyAccessToken, normalizeEmail, secureEqual } from "./security";
+import { decodeJwt } from "jose";
+import { randomToken, sha256, getIssuer, signAccessToken, signIdToken, signingJwks, verifyAccessToken, verifyIdTokenHint, normalizeEmail, secureEqual } from "./security";
 import { isAuthorizationRequestCurrent } from "./auth-flow";
 import { getStore } from "./storage";
 import { addSessionCookies, clearAuthCookies, loadSession, requireAuthenticated, requireCsrf, saveSession } from "./session";
@@ -31,7 +32,7 @@ export async function oauthEndpoint(request: Request, path: string): Promise<Res
   if (path === "/oauth2/revoke" && method === "POST") return revoke(request);
   if (path === "/oauth2/introspect" && method === "POST") return introspect(request);
   if (path === "/userinfo" && (method === "GET" || method === "POST")) return userinfo(request);
-  if (path === "/connect/logout" && method === "GET") return logout(request);
+  if (path === "/connect/logout" && (method === "GET" || method === "POST")) return logout(request);
   return null;
 }
 
@@ -218,7 +219,8 @@ async function refreshAccessToken(form: URLSearchParams, client: OAuthClient, co
   if (!raw) return oauthJson({ error: "invalid_grant" }, 400, cors);
   const { collections } = await getStore();
   const refresh = await collections.authorizations.findOneAndDelete({
-    _id: sha256(raw), kind: "refresh_token", clientId: client.clientId, expiresAt: { $gt: new Date() },
+    _id: sha256(raw), kind: "refresh_token", clientId: client.clientId,
+    $or: [{ expiresAt: { $gt: new Date() } }, { expiresAt: { $exists: false } }],
   });
   if (!refresh) return oauthJson({ error: "invalid_grant" }, 400, cors);
   const user = await collections.users.findOne({ _id: refresh.userId, active: true });
@@ -242,10 +244,9 @@ async function createTokenResponse(user: IdentityUser, client: OAuthClient, scop
   if (scopes.includes("openid")) payload.id_token = await signIdToken(user, client, scopes, nonce, now);
   if ((client.authorizationGrantTypes ?? []).includes("refresh_token")) {
     const refreshToken = randomToken(48);
-    const ttl = durationMilliseconds(client.refreshTokenTimeToLive || "P30D");
     await collections.authorizations.insertOne({
       _id: sha256(refreshToken), kind: "refresh_token", clientId: client.clientId, registeredClientId: client._id,
-      principalName: normalizeEmail(user.email), userId: user._id, scopes, expiresAt: new Date(now.getTime() + ttl), createdAt: now,
+      principalName: normalizeEmail(user.email), userId: user._id, scopes, createdAt: now,
     });
     payload.refresh_token = refreshToken;
   }
@@ -310,7 +311,13 @@ async function introspect(request: Request) {
   const token = form.get("token") || "";
   if (!token) return oauthJson({ active: false }, 200, cors);
   const { collections } = await getStore();
-  const record = await collections.authorizations.findOne({ _id: sha256(token), clientId: client.clientId, expiresAt: { $gt: new Date() } });
+  const record = await collections.authorizations.findOne({
+    _id: sha256(token), clientId: client.clientId,
+    $or: [
+      { expiresAt: { $gt: new Date() } },
+      { kind: "refresh_token", expiresAt: { $exists: false } },
+    ],
+  });
   if (!record) return oauthJson({ active: false }, 200, cors);
   if (record.kind === "refresh_token") return oauthJson({ active: true, client_id: client.clientId, scope: (record.scopes ?? []).join(" ") }, 200, cors);
   try {
@@ -323,23 +330,75 @@ async function introspect(request: Request) {
 
 async function logout(request: Request) {
   const url = new URL(request.url);
-  const redirectUri = url.searchParams.get("post_logout_redirect_uri");
-  const clientId = url.searchParams.get("client_id");
+  const method = request.method.toUpperCase();
+  const form = method === "POST" ? await readForm(request) : null;
+  const params = form ?? url.searchParams;
+  const redirectUri = params.get("post_logout_redirect_uri");
+  let clientId = params.get("client_id") || "";
+  const state = params.get("state") || "";
+  if (state.length > 2048) throw new HttpError(400, "El estado de cierre de sesión es demasiado largo.");
+
+  const session = await loadSession(request);
+  const idTokenHint = params.get("id_token_hint");
+  if (idTokenHint) {
+    if (idTokenHint.length > 8192) throw new HttpError(400, "El token de sesión no es válido.");
+    try {
+      const unverified = decodeJwt(idTokenHint);
+      const audiences = typeof unverified.aud === "string" ? [unverified.aud]
+        : Array.isArray(unverified.aud) ? unverified.aud.filter((value): value is string => typeof value === "string")
+          : [];
+      if (!clientId && audiences.length === 1) clientId = audiences[0];
+      if (!clientId || !audiences.includes(clientId)) throw new Error("Invalid audience.");
+      const client = await getClientByClientId(clientId);
+      if (!client) throw new Error("Unknown client.");
+      const claims = await verifyIdTokenHint(idTokenHint, clientId);
+      if ((audiences.length > 1 && claims.azp !== clientId)
+        || (typeof claims.azp === "string" && claims.azp !== clientId)) throw new Error("Invalid authorized party.");
+    } catch {
+      throw new HttpError(400, "El token de sesión no es válido.");
+    }
+  }
+
   let target = "/";
   if (redirectUri) {
     if (!clientId) throw new HttpError(400, "La solicitud de cierre de sesión no identifica el cliente.");
     const client = await getClientByClientId(clientId);
     if (!client || !(client.postLogoutRedirectUris ?? []).includes(redirectUri)) throw new HttpError(400, "La URL de cierre de sesión no está registrada.");
     const destination = new URL(redirectUri);
-    const state = url.searchParams.get("state");
     if (state) destination.searchParams.set("state", state);
     target = destination.toString();
   }
-  const session = await loadSession(request);
+
+  if (method === "GET") {
+    if (!session?.user) return logoutRedirect(target);
+    const hidden = [
+      ["client_id", clientId],
+      ["post_logout_redirect_uri", redirectUri || ""],
+      ["state", state],
+    ].filter(([, value]) => value).map(([name, value]) => `<input type="hidden" name="${name}" value="${escapeHtml(value)}">`).join("");
+    const html = `<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cerrar sesión · Karmancos ID</title><main><h1>¿Quieres cerrar sesión?</h1><p>Se cerrará tu sesión de Karmancos ID y se avisará a las aplicaciones conectadas.</p><form method="post" action="/connect/logout"><input type="hidden" name="_csrf" value="${escapeHtml(session.session.csrfToken)}">${hidden}<button type="submit">Cerrar sesión</button></form><p><a href="/cuenta">Cancelar</a></p></main></html>`;
+    return new Response(html, { status: 200, headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+      "Referrer-Policy": "no-referrer",
+      "X-Content-Type-Options": "nosniff",
+      "X-Frame-Options": "DENY",
+    } });
+  }
+
+  if (!form) throw new HttpError(405, "Método no permitido.");
+  requireCsrf(request, session, form.get("_csrf") || "");
+  if (!session?.user) return logoutRedirect(target);
   await logoutIdentitySession(session);
+  return logoutRedirect(target);
+}
+
+function logoutRedirect(target: string) {
   const headers = new Headers();
   clearAuthCookies(headers);
   headers.set("Location", target);
+  headers.set("Cache-Control", "no-store");
   return new Response(null, { status: 302, headers });
 }
 
@@ -401,10 +460,4 @@ function addLocation(headers: Headers, location: string) {
   headers.set("Location", location);
   headers.set("Cache-Control", "no-store");
   return headers;
-}
-
-function durationMilliseconds(value: string) {
-  const match = value.match(/^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/);
-  if (!match) return 30 * 24 * 60 * 60_000;
-  return (((Number(match[1] || 0) * 24 + Number(match[2] || 0)) * 60 + Number(match[3] || 0)) * 60 + Number(match[4] || 0)) * 1000;
 }

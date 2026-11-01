@@ -4,7 +4,7 @@ import { consumeRateLimit } from "./operations";
 import { rawPicture } from "./user-repository";
 import { loadSession, requireCsrf } from "./session";
 import { empty, json, readJson, requireString } from "./http";
-import { emailRegex, normalizeEmail } from "./security";
+import { emailRegex, normalizeEmail, validateBackchannelLogoutUri } from "./security";
 import { HttpError } from "./types";
 
 export async function publicEndpoint(request: Request, path: string): Promise<Response | null> {
@@ -54,8 +54,10 @@ export async function publicEndpoint(request: Request, path: string): Promise<Re
     const redirectUris = validateApplicationUris(input.redirectUris);
     const postLogoutRedirectUris = input.postLogoutRedirectUris == null ? [] : validateApplicationUris(input.postLogoutRedirectUris);
     const backchannelLogoutUri = typeof input.backchannelLogoutUri === "string" && input.backchannelLogoutUri.trim()
-      ? validateApplicationUris([input.backchannelLogoutUri])[0]
+      ? validateBackchannelLogoutUri(input.backchannelLogoutUri)
       : undefined;
+    const ipRate = await consumeRateLimit(request, "client-application-ip", "all", 10, 24 * 60 * 60_000);
+    if (!ipRate.allowed) throw new HttpError(429, "Has alcanzado el límite de solicitudes desde esta conexión. Prueba mañana.");
     const rate = await consumeRateLimit(request, "client-application", contactEmail, 3, 24 * 60 * 60_000);
     if (!rate.allowed) throw new HttpError(429, "Has alcanzado el límite de solicitudes. Prueba mañana.");
     const { collections } = await getStore();

@@ -53,6 +53,9 @@ export function completePopup() {
   const code = params.get("code");
   const error = params.get("error");
   if (!window.opener || !state || (!code && !error)) return false;
+  const cleanUrl = new URL(window.location.href);
+  ["code", "state", "error", "error_description", "error_uri", "session_state"].forEach((name) => cleanUrl.searchParams.delete(name));
+  window.history.replaceState(null, "", cleanUrl);
   window.opener.postMessage({ type: CALLBACK_MESSAGE, state, code, error }, window.location.origin);
   window.close();
   return true;

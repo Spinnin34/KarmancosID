@@ -31,7 +31,7 @@ export interface IdentitySession {
   csrfToken: string;
   createdAt: Date;
   lastAccessedAt: Date;
-  expiresAt: Date;
+  expiresAt?: Date;
   userAgent?: string;
   requestedAuthorization?: AuthorizationRequest;
   mfaVerifiedAt?: Date;

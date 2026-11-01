@@ -1,4 +1,3 @@
-import bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
 import { getStore } from "./storage";
 import { addSessionCookies, clearAuthCookies, loadSession, requireAuthenticated, requireCsrf, rotateSession } from "./session";
@@ -9,6 +8,9 @@ import { logoutIdentitySession } from "./logout";
 import { json, empty, readJson, requireString } from "./http";
 import { normalizeEmail, normalizeIdentifier, safeNextPath, validateIdentity } from "./security";
 import { HttpError } from "./types";
+import { hasLegacyPasswordHash, hashPassword, verifyPassword } from "./password";
+
+const DUMMY_PASSWORD_HASH = "$2b$12$jp0cDVEs3hl4Zw0iQJyDGuZqEFYczSWKHGSoL/G/5bY4c9Uoa2N3W";
 
 export async function authEndpoint(request: Request, path: string): Promise<Response | null> {
   const method = request.method.toUpperCase();
@@ -42,6 +44,8 @@ export async function authEndpoint(request: Request, path: string): Promise<Resp
     if (validation) throw new HttpError(400, validation);
     const email = normalizeEmail(String(input.email));
     const username = normalizeIdentifier(String(input.username));
+    const ipRate = await consumeRateLimit(request, "register-ip", "all", 20, 60 * 60_000);
+    if (!ipRate.allowed) throw new HttpError(429, "Has alcanzado el límite de registros desde esta conexión. Prueba más tarde.");
     const rate = await consumeRateLimit(request, "register", email, 4, 60 * 60_000);
     if (!rate.allowed) throw new HttpError(429, "Has alcanzado el límite de registros. Prueba más tarde.");
 
@@ -53,7 +57,7 @@ export async function authEndpoint(request: Request, path: string): Promise<Resp
     await createUser({
       email, username, firstName: String(input.firstName), lastName: String(input.lastName),
       secondLastName: typeof input.secondLastName === "string" ? input.secondLastName : "",
-      passwordHash: await bcrypt.hash(String(input.password), 12), role: "USER",
+      passwordHash: await hashPassword(String(input.password)), role: "USER",
     });
     await logAudit(email, "account.created", email);
     return json({ message: "Cuenta creada. Ya puedes iniciar sesión." }, 201);
@@ -80,8 +84,15 @@ export async function authEndpoint(request: Request, path: string): Promise<Resp
     }
 
     const user = await findUserByIdentifier(identifier);
-    if (!user || !user.active || !await bcrypt.compare(password, user.passwordHash)) {
+    // Match the password-check cost for unknown accounts to reduce timing-based enumeration.
+    const passwordMatches = await verifyPassword(password, user?.passwordHash ?? DUMMY_PASSWORD_HASH);
+    if (!user || !user.active || !passwordMatches) {
       throw new HttpError(401, "El usuario o la contraseña no son correctos.");
+    }
+    if (hasLegacyPasswordHash(user.passwordHash)) {
+      const upgradedHash = await hashPassword(password);
+      const { collections } = await getStore();
+      await collections.users.updateOne({ _id: user._id, passwordHash: user.passwordHash }, { $set: { passwordHash: upgradedHash } });
     }
 
     const current = context ?? await loadSession(request, true);
@@ -136,7 +147,7 @@ export async function bootstrapAdmin() {
   try {
     const user = await createUser({
       email, username, firstName: "Administrador", lastName: "", secondLastName: "",
-      passwordHash: await bcrypt.hash(password, 12), role: "ADMIN",
+      passwordHash: await hashPassword(password), role: "ADMIN",
     });
     await logAudit(email, "account.bootstrap_admin_created", user._id);
   } catch (error) {

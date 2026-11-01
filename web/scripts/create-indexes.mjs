@@ -27,6 +27,11 @@ try {
   const databaseName = process.env.MONGODB_DATABASE || databaseFromUri(uri) || "karmancosid";
   const database = client.db(databaseName);
 
+  const refreshTokens = await database.collection("oauth_authorizations").updateMany(
+    { kind: "refresh_token", expiresAt: { $gt: new Date() } },
+    { $unset: { expiresAt: "" } },
+  );
+
   await Promise.all([
     database.collection("identity_users").createIndexes([
       { key: { email: 1 }, unique: true, name: "uk_identity_email" },
@@ -59,7 +64,7 @@ try {
     ]),
   ]);
 
-  process.stdout.write(`Indexes are current for database ${databaseName}.\n`);
+  process.stdout.write(`Indexes are current for database ${databaseName}; ${refreshTokens.modifiedCount} active refresh token(s) migrated to no expiry.\n`);
 } finally {
   await client.close();
 }

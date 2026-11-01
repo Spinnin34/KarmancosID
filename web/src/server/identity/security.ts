@@ -1,5 +1,6 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { importPKCS8, importSPKI, SignJWT, jwtVerify, calculateJwkThumbprint } from "jose";
+import { isIP } from "node:net";
+import { compactVerify, importPKCS8, importSPKI, SignJWT, jwtVerify, calculateJwkThumbprint } from "jose";
 import { HttpError, type IdentityUser, type OAuthClient } from "./types";
 
 export const randomToken = (bytes = 32) => randomBytes(bytes).toString("base64url");
@@ -42,6 +43,24 @@ export function validateRedirectUris(values: unknown): string[] {
     }
     return url.href;
   }));
+}
+
+export function validateBackchannelLogoutUri(value: unknown): string {
+  if (typeof value !== "string" || !value.trim()) throw new HttpError(400, "Añade una URL HTTPS para el cierre de sesión.");
+  let url: URL;
+  try { url = new URL(value.trim()); } catch { throw new HttpError(400, "La URL de cierre de sesión debe ser HTTPS y pública."); }
+  const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
+  const localHostname = hostname === "localhost"
+    || hostname.endsWith(".localhost")
+    || hostname.endsWith(".local")
+    || hostname.endsWith(".internal")
+    || hostname.endsWith(".home.arpa");
+  if (url.protocol !== "https:" || !hostname.includes(".") || isIP(hostname) !== 0 || localHostname
+    || url.username || url.password || url.hash) {
+    throw new HttpError(400, "La URL de cierre de sesión debe ser HTTPS y pública.");
+  }
+  url.hostname = hostname;
+  return url.href;
 }
 
 export function validateOrigins(values: unknown): string[] {
@@ -184,6 +203,23 @@ export async function signBackchannelLogoutToken(user: IdentityUser, client: OAu
 
 export async function verifyAccessToken(token: string) {
   return jwtVerify(token, await getPublicKey(), { issuer: getIssuer(), algorithms: ["RS256"] });
+}
+
+export async function verifyIdTokenHint(token: string, clientId: string) {
+  const verified = await compactVerify(token, await getPublicKey(), { algorithms: ["RS256"] });
+  const payload = JSON.parse(Buffer.from(verified.payload).toString("utf8")) as Record<string, unknown>;
+  const now = Math.floor(Date.now() / 1000);
+  const audiences = typeof payload.aud === "string" ? [payload.aud]
+    : Array.isArray(payload.aud) ? payload.aud.filter((value): value is string => typeof value === "string")
+      : [];
+  if (verified.protectedHeader.typ !== "JWT" || payload.iss !== getIssuer() || !audiences.includes(clientId)
+    || typeof payload.sub !== "string" || typeof payload.auth_time !== "number"
+    || typeof payload.iat !== "number" || typeof payload.exp !== "number"
+    || payload.iat > now + 60 || payload.exp < payload.iat
+    || (typeof payload.nbf === "number" && payload.nbf > now + 60)) {
+    throw new Error("Invalid ID Token hint.");
+  }
+  return payload;
 }
 
 export function getIssuer(): string {

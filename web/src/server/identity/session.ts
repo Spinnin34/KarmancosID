@@ -1,3 +1,4 @@
+import type { Filter } from "mongodb";
 import { randomToken, secureEqual } from "./security";
 import { HttpError, type IdentitySession, type IdentityUser } from "./types";
 import { getStore } from "./storage";
@@ -6,6 +7,7 @@ import { isAuthorizationRequestCurrent } from "./auth-flow";
 
 const PERSISTENT_SESSION_SECONDS = 100 * 365 * 24 * 60 * 60;
 const TEMPORARY_SESSION_SECONDS = 30 * 60;
+const SESSION_TOUCH_INTERVAL_MS = 5 * 60_000;
 const SESSION_COOKIE = process.env.KARMANCOS_SESSION_COOKIE_NAME || "KARMANCOSID";
 const secureCookie = process.env.KARMANCOS_SECURE_COOKIES !== "false";
 
@@ -46,9 +48,22 @@ function cookie(name: string, value: string, options: { httpOnly?: boolean; maxA
   return parts.join("; ");
 }
 
-function sessionLifetimeSeconds(user: IdentityUser | null, mfaVerifiedAt?: Date) {
+function sessionExpirySeconds(user: IdentityUser | null, mfaVerifiedAt?: Date): number | null {
   if (!user || (user.role === "ADMIN" && !mfaVerifiedAt)) return TEMPORARY_SESSION_SECONDS;
-  return PERSISTENT_SESSION_SECONDS;
+  return null;
+}
+
+function sessionCookieLifetimeSeconds(user: IdentityUser | null, mfaVerifiedAt?: Date) {
+  return sessionExpirySeconds(user, mfaVerifiedAt) ?? PERSISTENT_SESSION_SECONDS;
+}
+
+export function activeSessionFilter(now = new Date()): Filter<IdentitySession> {
+  return {
+    $or: [
+      { expiresAt: { $gt: now } },
+      { expiresAt: { $exists: false }, userId: { $ne: null } },
+    ],
+  };
 }
 
 export function setSessionCookie(headers: Headers, sid: string, maxAge = PERSISTENT_SESSION_SECONDS) {
@@ -68,7 +83,7 @@ export async function loadSession(request: Request, create = false): Promise<Ses
   const sid = cookies(request).get(SESSION_COOKIE);
   const { collections } = await getStore();
   let session = sid
-    ? await collections.sessions.findOne({ _id: sid, expiresAt: { $gt: new Date() } })
+    ? await collections.sessions.findOne({ _id: sid, ...activeSessionFilter() })
     : null;
   let isNew = false;
 
@@ -79,24 +94,14 @@ export async function loadSession(request: Request, create = false): Promise<Ses
       await collections.sessions.deleteOne({ _id: session._id });
       session = null;
     } else {
-      const expiresAt = new Date(now.getTime() + sessionLifetimeSeconds(user, session.mfaVerifiedAt) * 1000);
-      await collections.sessions.updateOne({ _id: session._id }, {
-        $set: { lastAccessedAt: now, expiresAt },
-      });
-      session.lastAccessedAt = now;
-      session.expiresAt = expiresAt;
+      await touchSession(session, now, sessionExpirySeconds(user, session.mfaVerifiedAt), collections.sessions);
       return rememberSession(request, { session, user, isNew });
     }
   }
 
   if (session) {
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + TEMPORARY_SESSION_SECONDS * 1000);
-    await collections.sessions.updateOne({ _id: session._id }, {
-      $set: { lastAccessedAt: now, expiresAt },
-    });
-    session.lastAccessedAt = now;
-    session.expiresAt = expiresAt;
+    await touchSession(session, now, TEMPORARY_SESSION_SECONDS, collections.sessions);
     return rememberSession(request, { session, user: null, isNew });
   }
 
@@ -116,8 +121,32 @@ export async function loadSession(request: Request, create = false): Promise<Ses
   return rememberSession(request, { session: created, user: null, isNew });
 }
 
+async function touchSession(
+  session: IdentitySession,
+  now: Date,
+  lifetimeSeconds: number | null,
+  sessions: Awaited<ReturnType<typeof getStore>>["collections"]["sessions"],
+) {
+  const previousAccess = session.lastAccessedAt instanceof Date ? session.lastAccessedAt.getTime() : 0;
+  const previousExpiry = session.expiresAt instanceof Date ? session.expiresAt.getTime() : 0;
+  if (lifetimeSeconds === null) {
+    if (now.getTime() - previousAccess < SESSION_TOUCH_INTERVAL_MS && !session.expiresAt) return;
+    await sessions.updateOne({ _id: session._id }, { $set: { lastAccessedAt: now }, $unset: { expiresAt: "" } });
+    session.lastAccessedAt = now;
+    delete session.expiresAt;
+    return;
+  }
+  if (now.getTime() - previousAccess < SESSION_TOUCH_INTERVAL_MS
+    && previousExpiry > now.getTime() + SESSION_TOUCH_INTERVAL_MS) return;
+
+  const expiresAt = new Date(now.getTime() + lifetimeSeconds * 1000);
+  await sessions.updateOne({ _id: session._id }, { $set: { lastAccessedAt: now, expiresAt } });
+  session.lastAccessedAt = now;
+  session.expiresAt = expiresAt;
+}
+
 export function addSessionCookies(headers: Headers, context: SessionContext) {
-  const maxAge = sessionLifetimeSeconds(context.user, context.session.mfaVerifiedAt);
+  const maxAge = sessionCookieLifetimeSeconds(context.user, context.session.mfaVerifiedAt);
   setSessionCookie(headers, context.session._id, maxAge);
   setCsrfCookie(headers, context.session.csrfToken, maxAge);
 }
@@ -160,6 +189,7 @@ export async function rotateSession(request: Request, context: SessionContext, u
   const { collections } = await getStore();
   const prior = context.session;
   const now = new Date();
+  const expirySeconds = sessionExpirySeconds(user, options.mfaVerifiedAt);
   const next: IdentitySession = {
     _id: randomToken(32),
     userId: user._id,
@@ -167,7 +197,7 @@ export async function rotateSession(request: Request, context: SessionContext, u
     csrfToken: randomToken(32),
     createdAt: now,
     lastAccessedAt: now,
-    expiresAt: new Date(now.getTime() + sessionLifetimeSeconds(user, options.mfaVerifiedAt) * 1000),
+    ...(expirySeconds === null ? {} : { expiresAt: new Date(now.getTime() + expirySeconds * 1000) }),
     userAgent: request.headers.get("user-agent")?.slice(0, 512),
     ...(isAuthorizationRequestCurrent(prior.requestedAuthorization) ? { requestedAuthorization: prior.requestedAuthorization } : {}),
     ...(options.mfaVerifiedAt ? { mfaVerifiedAt: options.mfaVerifiedAt } : {}),

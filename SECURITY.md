@@ -8,7 +8,7 @@ Usa **Private vulnerability reporting** de GitHub si está habilitado. Si no, co
 
 ## Controles y límites
 
-La implementación incluye PKCE S256, callback exacto, `state` y `nonce`, protección CSRF, cookies HTTP-only, límite de intentos persistido, hash BCrypt, revocación de sesiones y autorizaciones, TOTP obligatorio para administradores, códigos de recuperación de un solo uso, registro de auditoría, CORS acotado y cabeceras de seguridad.
+La implementación incluye PKCE S256, callback exacto, `state` y `nonce`, protección CSRF, cookies HTTP-only, límites de intentos persistidos, BCrypt con prehash SHA-256 versionado para contraseñas nuevas y migración de hashes antiguos al iniciar sesión, sesiones autenticadas y refresh tokens revocables sin caducidad por inactividad, TOTP obligatorio para administradores, códigos de recuperación de un solo uso, registro de auditoría, CORS acotado y cabeceras de seguridad.
 
 El producto no tiene sistema de correo: no verifica automáticamente direcciones y no puede recuperar cuentas por email. La recuperación requiere verificación de identidad fuera de la aplicación y actuación de administración con MFA. El código no constituye una auditoría ni una certificación de seguridad.
 
