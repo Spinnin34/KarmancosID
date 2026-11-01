@@ -61,5 +61,10 @@ export async function identityApi<T>(path: string, init: IdentityRequestInit = {
     if (response.status === 403) csrfToken = undefined;
     throw new IdentityApiError(message, response.status);
   }
+  if (path === "/api/auth/login") {
+    // Login rotates the session and CSRF cookie; discard the anonymous-session token.
+    csrfToken = undefined;
+    csrfRequest = undefined;
+  }
   return data as T;
 }

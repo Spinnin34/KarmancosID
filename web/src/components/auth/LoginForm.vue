@@ -68,6 +68,7 @@ async function submit() {
 }
 
 async function verifyMfa() {
+  if (loading.value) return;
   message.value = "";
   loading.value = true;
   try {

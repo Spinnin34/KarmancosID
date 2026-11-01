@@ -6,6 +6,7 @@ import { publicEndpoint } from "./public";
 import { oauthEndpoint } from "./oauth";
 import { json, safeJsonError } from "./http";
 import { HttpError } from "./types";
+import { addSessionCookies, sessionForRequest } from "./session";
 
 let bootstrapPromise: Promise<void> | undefined;
 
@@ -27,7 +28,7 @@ export async function handleIdentityRequest(request: Request): Promise<Response>
     ];
     for (const endpoint of endpoints) {
       const response = await endpoint();
-      if (response) return response;
+      if (response) return refreshSessionCookies(request, response);
     }
     return json({ message: "No se encontró esta ruta." }, 404);
   } catch (error) {
@@ -36,8 +37,18 @@ export async function handleIdentityRequest(request: Request): Promise<Response>
       const oauthError = message === "invalid_client" ? "invalid_client"
         : error.status === 401 ? "invalid_client"
           : "invalid_request";
-      return json({ error: oauthError, error_description: error.status >= 500 ? "No se pudo completar la solicitud." : message }, error.status);
+      return refreshSessionCookies(request, json({ error: oauthError, error_description: error.status >= 500 ? "No se pudo completar la solicitud." : message }, error.status));
     }
-    return safeJsonError(error);
+    return refreshSessionCookies(request, safeJsonError(error));
   }
+}
+
+function refreshSessionCookies(request: Request, response: Response): Response {
+  if (response.headers.has("set-cookie")) return response;
+  const context = sessionForRequest(request);
+  if (!context?.user) return response;
+
+  const headers = new Headers(response.headers);
+  addSessionCookies(headers, context);
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }

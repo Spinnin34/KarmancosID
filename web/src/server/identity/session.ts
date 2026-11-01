@@ -13,6 +13,17 @@ export interface SessionContext {
   isNew: boolean;
 }
 
+const requestSessions = new WeakMap<Request, SessionContext | null>();
+
+export function sessionForRequest(request: Request): SessionContext | null {
+  return requestSessions.get(request) ?? null;
+}
+
+function rememberSession(request: Request, context: SessionContext | null): SessionContext | null {
+  requestSessions.set(request, context);
+  return context;
+}
+
 export function cookies(request: Request): Map<string, string> {
   const result = new Map<string, string>();
   for (const part of (request.headers.get("cookie") ?? "").split(";")) {
@@ -65,7 +76,7 @@ export async function loadSession(request: Request, create = false): Promise<Ses
       });
       session.lastAccessedAt = new Date();
       session.expiresAt = new Date(Date.now() + SESSION_SECONDS * 1000);
-      return { session, user, isNew };
+      return rememberSession(request, { session, user, isNew });
     }
   }
 
@@ -75,10 +86,10 @@ export async function loadSession(request: Request, create = false): Promise<Ses
     });
     session.lastAccessedAt = new Date();
     session.expiresAt = new Date(Date.now() + SESSION_SECONDS * 1000);
-    return { session, user: null, isNew };
+    return rememberSession(request, { session, user: null, isNew });
   }
 
-  if (!create) return null;
+  if (!create) return rememberSession(request, null);
   const now = new Date();
   const created: IdentitySession = {
     _id: randomToken(32),
@@ -91,7 +102,7 @@ export async function loadSession(request: Request, create = false): Promise<Ses
   };
   await collections.sessions.insertOne(created);
   isNew = true;
-  return { session: created, user: null, isNew };
+  return rememberSession(request, { session: created, user: null, isNew });
 }
 
 export function addSessionCookies(headers: Headers, context: SessionContext) {
