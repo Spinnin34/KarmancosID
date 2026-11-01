@@ -31,7 +31,9 @@ El registro crea cuentas con `emailVerified: false`. No existe una ruta de enví
 
 Las cuentas administradoras deben configurar TOTP antes de entrar al panel. Los secretos TOTP se cifran con AES-256-GCM y la clave `KARMANCOS_MFA_ENCRYPTION_KEY_B64`. Se generan códigos de recuperación de un uso y solo se muestran al activar MFA. Los accesos, consumos de recuperación, cambios de perfil y acciones administrativas relevantes quedan en auditoría.
 
-Las sesiones duran 30 días sin actividad y renuevan ese plazo cuando se usan. La persona puede revocar sesiones desde su cuenta.
+Las sesiones autenticadas no caducan por inactividad y su cookie de larga duración se renueva al usarlas. Las sesiones anónimas y los pasos de configuración/verificación MFA pendientes caducan a los 30 minutos. La persona puede revocar sesiones desde su cuenta.
+
+Al cerrar sesión, Karmancos ID revoca sus tokens OIDC y envía un Logout Token firmado a los clientes que registraron `backchannel_logout_uri`. Cada aplicación conectada debe validar ese token y cerrar su sesión local por `sub`; las aplicaciones sin ese endpoint no pueden recibir el cierre remoto. Discovery anuncia Back-Channel Logout sin soporte de `sid`.
 
 Si una persona pierde acceso, la administración verifica su identidad fuera del producto, inicia sesión con TOTP y le entrega un código de recuperación de un solo uso, limitado a 30 minutos. Karmancos ID solo guarda el hash del código; la administración nunca consulta ni establece contraseñas. El restablecimiento revoca sesiones y autorizaciones anteriores.
 

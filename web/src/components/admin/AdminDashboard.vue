@@ -18,14 +18,16 @@ type SectionId = "overview" | "applications" | "clients" | "users" | "sessions" 
 type Overview = { accounts: number; clients: number; activeSessions: number };
 type Client = {
   id: string; clientId: string; name: string; clientType: "public" | "confidential";
-  redirectUris: string[]; allowedOrigins: string[]; postLogoutRedirectUris: string[]; scopes: string[]; createdAt: string;
+  redirectUris: string[]; allowedOrigins: string[]; postLogoutRedirectUris: string[];
+  backchannelLogoutUri: string; scopes: string[]; createdAt: string;
 };
 type User = AdminUser;
 type Session = { reference: string; email: string | null; createdAt: string; lastAccessedAt: string };
 type Activity = { id: string; actor: string; action: string; subject: string; occurredAt: string };
 type Application = {
   id: string; name: string; contactEmail: string; description: string; clientType: "public" | "confidential";
-  redirectUris: string[]; postLogoutRedirectUris: string[]; status: "PENDING" | "APPROVED" | "REJECTED";
+  redirectUris: string[]; postLogoutRedirectUris: string[]; backchannelLogoutUri: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
   submittedAt: string; reviewedAt: string | null;
 };
 type CurrentUser = { id: string; email: string; displayName: string; role: string };
@@ -60,6 +62,10 @@ const clientName = ref("");
 const clientType = ref("confidential");
 const redirectUrisText = ref("");
 const postLogoutUrisText = ref("");
+const backchannelLogoutUriText = ref("");
+const backchannelLogoutUriDrafts = ref<Record<string, string>>({});
+const savingBackchannelClientId = ref("");
+const backchannelLogoutError = ref("");
 const allowedOriginsText = ref("");
 const clientError = ref("");
 const newSecret = ref("");
@@ -145,6 +151,7 @@ async function loadDashboard() {
     currentUser.value = me;
     overview.value = overviewData;
     clients.value = clientData;
+    backchannelLogoutUriDrafts.value = Object.fromEntries(clientData.map((client) => [client.id, client.backchannelLogoutUri ?? ""]));
     applications.value = applicationData;
     users.value = userData;
     sessions.value = sessionData;
@@ -178,6 +185,7 @@ function prepareClientFromApplication(application: Application) {
   clientType.value = application.clientType;
   redirectUrisText.value = application.redirectUris.join("\n");
   postLogoutUrisText.value = application.postLogoutRedirectUris.join("\n");
+  backchannelLogoutUriText.value = application.backchannelLogoutUri ?? "";
   allowedOriginsText.value = [...new Set(application.redirectUris.map((uri) => new URL(uri).origin))].join("\n");
   clientError.value = "";
   navigateSection("clients");
@@ -206,19 +214,42 @@ async function createClient() {
         clientType: clientType.value,
         redirectUris,
         allowedOrigins: redirectList(allowedOriginsText.value),
-        postLogoutRedirectUris: redirectList(postLogoutUrisText.value)
+        postLogoutRedirectUris: redirectList(postLogoutUrisText.value),
+        backchannelLogoutUri: backchannelLogoutUriText.value.trim()
       })
     });
     newSecret.value = created.clientSecret ?? "";
     clientName.value = "";
     redirectUrisText.value = "";
     postLogoutUrisText.value = "";
+    backchannelLogoutUriText.value = "";
     allowedOriginsText.value = "";
     await loadDashboard();
   } catch (cause) {
     clientError.value = cause instanceof Error ? cause.message : "No se pudo registrar el cliente.";
   } finally {
     creatingClient.value = false;
+  }
+}
+
+function updateBackchannelLogoutUriDraft(clientId: string, value: string) {
+  backchannelLogoutUriDrafts.value[clientId] = value;
+}
+
+async function saveBackchannelLogoutUri(client: Client) {
+  backchannelLogoutError.value = "";
+  savingBackchannelClientId.value = client.id;
+  try {
+    await api(`/api/admin/clients/${encodeURIComponent(client.id)}/backchannel-logout`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uri: backchannelLogoutUriDrafts.value[client.id] ?? "" })
+    });
+    await loadDashboard();
+  } catch (cause) {
+    backchannelLogoutError.value = cause instanceof Error ? cause.message : "No se pudo guardar el endpoint de cierre de sesión.";
+  } finally {
+    savingBackchannelClientId.value = "";
   }
 }
 
@@ -456,6 +487,7 @@ onBeforeUnmount(() => {
                 <p><strong>Tipo:</strong> {{ application.clientType === 'public' ? 'Público · navegador o app' : 'Confidencial · servidor' }}</p>
                 <div><strong>URL de retorno</strong><ul><li v-for="uri in application.redirectUris" :key="uri"><code>{{ uri }}</code></li></ul></div>
                 <div v-if="application.postLogoutRedirectUris.length"><strong>URL de salida</strong><ul><li v-for="uri in application.postLogoutRedirectUris" :key="uri"><code>{{ uri }}</code></li></ul></div>
+                <div v-if="application.backchannelLogoutUri"><strong>Endpoint de cierre de sesión interno</strong><p><code>{{ application.backchannelLogoutUri }}</code></p></div>
                 <div class="table-actions">
                   <template v-if="application.status === 'PENDING'">
                     <Button variant="solid" size="sm" type="button" :loading="reviewingApplicationId === application.id" @click="reviewApplication(application, 'APPROVED')">Aprobar revisión</Button>
@@ -472,19 +504,22 @@ onBeforeUnmount(() => {
             <div class="admin-section">
               <div class="admin-section-heading"><div><h2>Clientes registrados</h2><p>La URL de retorno debe coincidir exactamente con la de tu aplicación.</p></div></div>
               <div v-if="clients.length" class="table-wrap">
-                <Table caption="Clientes registrados en Karmancos ID" variant="surface" density="compact" :column-count="4" hover>
-                  <template #header><thead><tr><th scope="col">Servicio</th><th scope="col">Identificador</th><th scope="col">Tipo</th><th scope="col">Acción</th></tr></thead></template>
+                <Table caption="Clientes registrados en Karmancos ID" variant="surface" density="compact" :column-count="5" hover>
+                  <template #header><thead><tr><th scope="col">Servicio</th><th scope="col">Identificador</th><th scope="col">Tipo</th><th scope="col">Endpoint de logout interno</th><th scope="col">Acción</th></tr></thead></template>
                   <tbody>
                     <tr v-for="client in clients" :key="client.id">
                       <th scope="row"><div class="table-cell-main"><strong>{{ client.name }}</strong><small>{{ client.redirectUris[0] }}</small></div></th>
                       <td data-label="Identificador"><code>{{ client.clientId }}</code></td>
                       <td data-label="Tipo"><Badge variant="soft" :color="client.clientType === 'public' ? 'info' : 'accent'">{{ client.clientType === 'public' ? 'Público' : 'Confidencial' }}</Badge></td>
+                      <td data-label="Endpoint de logout interno"><div class="client-logout-uri-editor"><Input :id="`backchannel-logout-${client.id}`" :model-value="backchannelLogoutUriDrafts[client.id] ?? client.backchannelLogoutUri" :label="`Endpoint de cierre de sesión de ${client.name}`" type="url" placeholder="https://app.example.com/auth/backchannel-logout" @update:model-value="(value) => updateBackchannelLogoutUriDraft(client.id, value)" /><Button variant="outline" size="sm" type="button" :loading="savingBackchannelClientId === client.id" @click="saveBackchannelLogoutUri(client)">Guardar</Button></div></td>
                       <td data-label="Acción"><Button variant="outline" color="destructive" size="sm" type="button" @click="deleteClient(client)">Eliminar</Button></td>
                     </tr>
                   </tbody>
                 </Table>
               </div>
               <div v-else class="empty-state">Sin clientes. Añade tu primera web o aplicación conectada.</div>
+              <p v-if="backchannelLogoutError" class="form-message" role="alert">{{ backchannelLogoutError }}</p>
+              <p class="admin-form-hint">El servicio conectado debe implementar este endpoint OIDC para cerrar su sesión al recibir el Logout Token. Puedes dejarlo vacío para quitar la notificación.</p>
             </div>
 
             <form id="new-client-form" class="admin-form-panel" @submit.prevent="createClient">
@@ -494,6 +529,7 @@ onBeforeUnmount(() => {
               <Textarea id="redirect-uris" v-model="redirectUrisText" label="URL de retorno" :rows="3" :max-height="180" resizable="vertical" placeholder="https://mi-sitio.com/auth/callback" hint="Una URL exacta por línea. HTTPS es obligatorio fuera de localhost." required />
               <Textarea id="allowed-origins" v-model="allowedOriginsText" label="Orígenes web autorizados · para SDK de navegador" :rows="2" :max-height="140" resizable="vertical" placeholder="https://mi-sitio.com" hint="Origen exacto por línea; HTTPS obligatorio fuera de localhost." />
               <Textarea id="post-logout-uris" v-model="postLogoutUrisText" label="URL tras cerrar sesión · opcional" :rows="2" :max-height="140" resizable="vertical" placeholder="https://mi-sitio.com/" hint="Una URL exacta por línea." />
+              <Input id="client-backchannel-logout" v-model="backchannelLogoutUriText" label="Endpoint de cierre de sesión interno · opcional" type="url" placeholder="https://mi-sitio.com/auth/backchannel-logout" hint="Debe validar el Logout Token y eliminar las sesiones locales del usuario." />
               <p v-if="clientError" class="form-message" role="alert">{{ clientError }}</p>
               <Button class="form-action" variant="solid" type="submit" :loading="creatingClient">Crear cliente</Button>
               <div v-if="newSecret" class="secret-reveal" role="status">

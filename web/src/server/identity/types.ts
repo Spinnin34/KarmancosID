@@ -60,6 +60,7 @@ export interface OAuthClient {
   authorizationGrantTypes: string[];
   redirectUris: string[];
   postLogoutRedirectUris: string[];
+  backchannelLogoutUri?: string;
   allowedOrigins: string[];
   scopes: string[];
   requireProofKey: boolean;

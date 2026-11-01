@@ -5,6 +5,7 @@ import { getStore } from "./storage";
 import { addSessionCookies, clearAuthCookies, loadSession, requireAuthenticated, requireCsrf, saveSession } from "./session";
 import { compareClientSecret, consentId, getClientByClientId } from "./client-repository";
 import { logAudit } from "./operations";
+import { logoutIdentitySession } from "./logout";
 import { pictureUrl } from "./user-repository";
 import { empty, json, readForm } from "./http";
 import { HttpError, type AuthorizationRequest, type IdentityUser, type OAuthClient } from "./types";
@@ -335,11 +336,7 @@ async function logout(request: Request) {
     target = destination.toString();
   }
   const session = await loadSession(request);
-  if (session?.user) await logAudit(session.user.email, "account.signed_out", session.user.email);
-  if (session) {
-    const { collections } = await getStore();
-    await collections.sessions.deleteOne({ _id: session.session._id });
-  }
+  await logoutIdentitySession(session);
   const headers = new Headers();
   clearAuthCookies(headers);
   headers.set("Location", target);

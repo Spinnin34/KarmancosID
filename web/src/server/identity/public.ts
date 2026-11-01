@@ -53,11 +53,15 @@ export async function publicEndpoint(request: Request, path: string): Promise<Re
     if (type !== "public" && type !== "confidential") throw new HttpError(400, "Elige el tipo público o confidencial.");
     const redirectUris = validateApplicationUris(input.redirectUris);
     const postLogoutRedirectUris = input.postLogoutRedirectUris == null ? [] : validateApplicationUris(input.postLogoutRedirectUris);
+    const backchannelLogoutUri = typeof input.backchannelLogoutUri === "string" && input.backchannelLogoutUri.trim()
+      ? validateApplicationUris([input.backchannelLogoutUri])[0]
+      : undefined;
     const rate = await consumeRateLimit(request, "client-application", contactEmail, 3, 24 * 60 * 60_000);
     if (!rate.allowed) throw new HttpError(429, "Has alcanzado el límite de solicitudes. Prueba mañana.");
     const { collections } = await getStore();
     await collections.applications.insertOne({
       _id: randomUUID(), name, contactEmail, description, clientType: type, redirectUris, postLogoutRedirectUris,
+      ...(backchannelLogoutUri ? { backchannelLogoutUri } : {}),
       status: "PENDING", submittedAt: new Date(), reviewedAt: null,
     });
     return json({ message: "Solicitud recibida. El equipo revisará el dominio y las URL de retorno antes de activar el cliente." }, 202);

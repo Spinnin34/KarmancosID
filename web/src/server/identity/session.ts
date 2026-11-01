@@ -4,7 +4,8 @@ import { getStore } from "./storage";
 import { appendCookie } from "./http";
 import { isAuthorizationRequestCurrent } from "./auth-flow";
 
-const SESSION_SECONDS = 30 * 24 * 60 * 60;
+const PERSISTENT_SESSION_SECONDS = 100 * 365 * 24 * 60 * 60;
+const TEMPORARY_SESSION_SECONDS = 30 * 60;
 const SESSION_COOKIE = process.env.KARMANCOS_SESSION_COOKIE_NAME || "KARMANCOSID";
 const secureCookie = process.env.KARMANCOS_SECURE_COOKIES !== "false";
 
@@ -41,16 +42,21 @@ function cookie(name: string, value: string, options: { httpOnly?: boolean; maxA
   const parts = [`${name}=${options.clear ? "" : encodeURIComponent(value)}`, "Path=/", "SameSite=Lax"];
   if (options.httpOnly) parts.push("HttpOnly");
   if (secureCookie) parts.push("Secure");
-  parts.push(`Max-Age=${options.clear ? 0 : options.maxAge ?? SESSION_SECONDS}`);
+  parts.push(`Max-Age=${options.clear ? 0 : options.maxAge ?? PERSISTENT_SESSION_SECONDS}`);
   return parts.join("; ");
 }
 
-export function setSessionCookie(headers: Headers, sid: string) {
-  appendCookie(headers, cookie(SESSION_COOKIE, sid, { httpOnly: true }));
+function sessionLifetimeSeconds(user: IdentityUser | null, mfaVerifiedAt?: Date) {
+  if (!user || (user.role === "ADMIN" && !mfaVerifiedAt)) return TEMPORARY_SESSION_SECONDS;
+  return PERSISTENT_SESSION_SECONDS;
 }
 
-export function setCsrfCookie(headers: Headers, token: string) {
-  appendCookie(headers, cookie("XSRF-TOKEN", token));
+export function setSessionCookie(headers: Headers, sid: string, maxAge = PERSISTENT_SESSION_SECONDS) {
+  appendCookie(headers, cookie(SESSION_COOKIE, sid, { httpOnly: true, maxAge }));
+}
+
+export function setCsrfCookie(headers: Headers, token: string, maxAge = PERSISTENT_SESSION_SECONDS) {
+  appendCookie(headers, cookie("XSRF-TOKEN", token, { maxAge }));
 }
 
 export function clearAuthCookies(headers: Headers) {
@@ -68,28 +74,29 @@ export async function loadSession(request: Request, create = false): Promise<Ses
 
   if (session && session.userId) {
     const now = new Date();
-    const [user] = await Promise.all([
-      collections.users.findOne({ _id: session.userId, active: true }),
-      collections.sessions.updateOne({ _id: session._id }, {
-        $set: { lastAccessedAt: now, expiresAt: new Date(now.getTime() + SESSION_SECONDS * 1000) },
-      }),
-    ]);
+    const user = await collections.users.findOne({ _id: session.userId, active: true });
     if (!user) {
       await collections.sessions.deleteOne({ _id: session._id });
       session = null;
     } else {
+      const expiresAt = new Date(now.getTime() + sessionLifetimeSeconds(user, session.mfaVerifiedAt) * 1000);
+      await collections.sessions.updateOne({ _id: session._id }, {
+        $set: { lastAccessedAt: now, expiresAt },
+      });
       session.lastAccessedAt = now;
-      session.expiresAt = new Date(now.getTime() + SESSION_SECONDS * 1000);
+      session.expiresAt = expiresAt;
       return rememberSession(request, { session, user, isNew });
     }
   }
 
   if (session) {
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + TEMPORARY_SESSION_SECONDS * 1000);
     await collections.sessions.updateOne({ _id: session._id }, {
-      $set: { lastAccessedAt: new Date(), expiresAt: new Date(Date.now() + SESSION_SECONDS * 1000) },
+      $set: { lastAccessedAt: now, expiresAt },
     });
-    session.lastAccessedAt = new Date();
-    session.expiresAt = new Date(Date.now() + SESSION_SECONDS * 1000);
+    session.lastAccessedAt = now;
+    session.expiresAt = expiresAt;
     return rememberSession(request, { session, user: null, isNew });
   }
 
@@ -102,7 +109,7 @@ export async function loadSession(request: Request, create = false): Promise<Ses
     csrfToken: randomToken(32),
     createdAt: now,
     lastAccessedAt: now,
-    expiresAt: new Date(now.getTime() + SESSION_SECONDS * 1000),
+    expiresAt: new Date(now.getTime() + TEMPORARY_SESSION_SECONDS * 1000),
   };
   await collections.sessions.insertOne(created);
   isNew = true;
@@ -110,8 +117,9 @@ export async function loadSession(request: Request, create = false): Promise<Ses
 }
 
 export function addSessionCookies(headers: Headers, context: SessionContext) {
-  setSessionCookie(headers, context.session._id);
-  setCsrfCookie(headers, context.session.csrfToken);
+  const maxAge = sessionLifetimeSeconds(context.user, context.session.mfaVerifiedAt);
+  setSessionCookie(headers, context.session._id, maxAge);
+  setCsrfCookie(headers, context.session.csrfToken, maxAge);
 }
 
 export function requireAuthenticated(context: SessionContext | null): asserts context is SessionContext & { user: IdentityUser } {
@@ -159,7 +167,7 @@ export async function rotateSession(request: Request, context: SessionContext, u
     csrfToken: randomToken(32),
     createdAt: now,
     lastAccessedAt: now,
-    expiresAt: new Date(now.getTime() + SESSION_SECONDS * 1000),
+    expiresAt: new Date(now.getTime() + sessionLifetimeSeconds(user, options.mfaVerifiedAt) * 1000),
     userAgent: request.headers.get("user-agent")?.slice(0, 512),
     ...(isAuthorizationRequestCurrent(prior.requestedAuthorization) ? { requestedAuthorization: prior.requestedAuthorization } : {}),
     ...(options.mfaVerifiedAt ? { mfaVerifiedAt: options.mfaVerifiedAt } : {}),

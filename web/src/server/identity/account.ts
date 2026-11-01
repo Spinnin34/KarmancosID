@@ -225,6 +225,9 @@ async function adminEndpoint(request: Request, path: string, context: Awaited<Re
       || (Array.isArray(input.postLogoutRedirectUris) && input.postLogoutRedirectUris.length === 0)
       ? []
       : validateRedirectUris(input.postLogoutRedirectUris);
+    const backchannelLogoutUri = typeof input.backchannelLogoutUri === "string" && input.backchannelLogoutUri.trim()
+      ? validateRedirectUris([input.backchannelLogoutUri])[0]
+      : undefined;
     const clientType = typeof input.clientType === "string" ? input.clientType.toLowerCase() : "confidential";
     if (!new Set(["public", "confidential"]).has(clientType)) throw new HttpError(400, "Elige un cliente público o confidencial.");
     const clientId = `kmc_${randomToken(18)}`;
@@ -234,7 +237,9 @@ async function adminEndpoint(request: Request, path: string, context: Awaited<Re
       ...(secret ? { clientSecret: await bcrypt.hash(secret, 12) } : {}),
       clientAuthenticationMethods: secret ? ["client_secret_basic"] : ["none"],
       authorizationGrantTypes: secret ? ["authorization_code", "refresh_token"] : ["authorization_code"],
-      redirectUris: redirects, postLogoutRedirectUris: postLogout, allowedOrigins: origins,
+      redirectUris: redirects, postLogoutRedirectUris: postLogout,
+      ...(backchannelLogoutUri ? { backchannelLogoutUri } : {}),
+      allowedOrigins: origins,
       scopes: ["openid", "profile", "email"], requireProofKey: true, requireAuthorizationConsent: true,
       accessTokenTimeToLive: "PT5M", refreshTokenTimeToLive: "P30D", reuseRefreshTokens: false,
       accessTokenFormat: "self-contained", clientIdIssuedAt: new Date(),
@@ -242,6 +247,24 @@ async function adminEndpoint(request: Request, path: string, context: Awaited<Re
     await collections.clients.insertOne(client);
     await logAudit(context!.user.email, "client.created", name);
     return json({ clientId, clientSecret: secret, note: "Guarda el secreto ahora. No volverá a mostrarse." }, 201);
+  }
+
+  const backchannelLogoutMatch = path.match(/^\/api\/admin\/clients\/([^/]+)\/backchannel-logout$/);
+  if (method === "PATCH" && backchannelLogoutMatch) {
+    requireCsrf(request, context); authorize();
+    const input = await readJson(request);
+    const uri = typeof input.uri === "string" ? input.uri.trim() : "";
+    const backchannelLogoutUri = uri ? validateRedirectUris([uri])[0] : "";
+    const clientId = decodeURIComponent(backchannelLogoutMatch[1]);
+    const client = await collections.clients.findOne({ _id: clientId });
+    if (!client) throw new HttpError(404, "No se encontró ese cliente.");
+    if (backchannelLogoutUri) {
+      await collections.clients.updateOne({ _id: client._id }, { $set: { backchannelLogoutUri } });
+    } else {
+      await collections.clients.updateOne({ _id: client._id }, { $unset: { backchannelLogoutUri: "" } });
+    }
+    await logAudit(context!.user.email, "client.backchannel_logout_updated", client.clientName);
+    return json({ message: "Endpoint de cierre de sesión actualizado." });
   }
 
   const deleteClient = path.match(/^\/api\/admin\/clients\/([^/]+)$/);
@@ -365,6 +388,7 @@ function clientView(client: OAuthClient) {
     redirectUris: client.redirectUris ?? [],
     allowedOrigins: client.allowedOrigins ?? [],
     postLogoutRedirectUris: client.postLogoutRedirectUris ?? [],
+    backchannelLogoutUri: client.backchannelLogoutUri ?? "",
     scopes: client.scopes ?? [],
     createdAt: client.clientIdIssuedAt,
   };
@@ -379,6 +403,7 @@ function applicationView(application: Record<string, unknown>) {
     clientType: application.clientType,
     redirectUris: application.redirectUris ?? [],
     postLogoutRedirectUris: application.postLogoutRedirectUris ?? [],
+    backchannelLogoutUri: typeof application.backchannelLogoutUri === "string" ? application.backchannelLogoutUri : "",
     status: application.status,
     submittedAt: application.submittedAt,
     reviewedAt: application.reviewedAt ?? null,

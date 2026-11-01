@@ -15,6 +15,7 @@ const description = ref("");
 const clientType = ref("confidential");
 const redirectUris = ref("");
 const postLogoutRedirectUris = ref("");
+const backchannelLogoutUri = ref("");
 const loading = ref(false);
 const error = ref("");
 const submitted = ref<{ name: string; email: string; returns: number; preview: boolean } | null>(null);
@@ -37,7 +38,8 @@ async function submit() {
     await identityApi<{ message?: string }>("/api/public/applications", {
       method: "POST",
       body: { name: name.value.trim(), contactEmail: contactEmail.value.trim(), description: description.value.trim(),
-        clientType: clientType.value, redirectUris: lines(redirectUris.value), postLogoutRedirectUris: lines(postLogoutRedirectUris.value) },
+        clientType: clientType.value, redirectUris: lines(redirectUris.value), postLogoutRedirectUris: lines(postLogoutRedirectUris.value),
+        backchannelLogoutUri: backchannelLogoutUri.value.trim() || undefined },
     });
     submitted.value = { name: name.value.trim(), email: contactEmail.value.trim(), returns: lines(redirectUris.value).length, preview: isPreviewMode() };
   } catch (cause) { error.value = cause instanceof Error ? cause.message : "No se pudo conectar con Karmancos ID."; }
@@ -52,6 +54,7 @@ function startAnotherRequest() {
   clientType.value = "confidential";
   redirectUris.value = "";
   postLogoutRedirectUris.value = "";
+  backchannelLogoutUri.value = "";
   error.value = "";
 }
 
@@ -86,6 +89,7 @@ function focusResult() {
         <Textarea id="request-description" v-model="description" label="Qué ofrece la aplicación y qué datos necesita" :rows="3" :max-height="180" :maxlength="1000" required />
         <Textarea id="request-callbacks" v-model="redirectUris" label="URI de retorno permitidas" :rows="3" :max-height="180" placeholder="https://app.example.com/auth/callback" hint="Una URL exacta HTTPS por línea; sin comodines." required />
         <Textarea id="request-logout" v-model="postLogoutRedirectUris" label="URI tras cerrar sesión · opcional" :rows="2" :max-height="140" placeholder="https://app.example.com/" hint="Una URL exacta por línea." />
+        <Input id="request-backchannel-logout" v-model="backchannelLogoutUri" label="Endpoint de cierre de sesión interno · opcional" type="url" placeholder="https://app.example.com/auth/backchannel-logout" hint="Endpoint HTTPS que validará el Logout Token de Karmancos ID y cerrará la sesión local." />
         <p v-if="error" class="form-message" role="alert">{{ error }}</p>
         <Button variant="solid" size="lg" type="submit" :loading="loading" :suffix-icon="loading ? undefined : ArrowRight">{{ loading ? 'Enviando solicitud…' : 'Enviar para revisión' }}</Button>
       </form>

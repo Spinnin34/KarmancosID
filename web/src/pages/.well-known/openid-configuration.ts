@@ -10,6 +10,8 @@ const metadata = {
   jwks_uri: `${issuer}/oauth2/jwks`,
   userinfo_endpoint: `${issuer}/userinfo`,
   end_session_endpoint: `${issuer}/connect/logout`,
+  backchannel_logout_supported: true,
+  backchannel_logout_session_supported: false,
   response_types_supported: ["code"],
   grant_types_supported: ["authorization_code", "refresh_token"],
   revocation_endpoint: `${issuer}/oauth2/revoke`,

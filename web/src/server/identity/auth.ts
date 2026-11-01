@@ -1,10 +1,11 @@
 import bcrypt from "bcryptjs";
 import { randomUUID } from "node:crypto";
 import { getStore } from "./storage";
-import { addSessionCookies, clearAuthCookies, loadSession, requireAuthenticated, requireCsrf, rotateSession, setCsrfCookie, setSessionCookie } from "./session";
+import { addSessionCookies, clearAuthCookies, loadSession, requireAuthenticated, requireCsrf, rotateSession } from "./session";
 import { consumeRateLimit, logAudit } from "./operations";
 import { createUser, findUserByEmail, findUserByIdentifier, userResponse } from "./user-repository";
 import { authorizationPath, isAuthorizationRequestCurrent } from "./auth-flow";
+import { logoutIdentitySession } from "./logout";
 import { json, empty, readJson, requireString } from "./http";
 import { normalizeEmail, normalizeIdentifier, safeNextPath, validateIdentity } from "./security";
 import { HttpError } from "./types";
@@ -87,8 +88,7 @@ export async function authEndpoint(request: Request, path: string): Promise<Resp
     if (!current) throw new Error("Could not create identity session.");
     const nextContext = await rotateSession(request, current, user);
     const headers = new Headers();
-    setSessionCookie(headers, nextContext.session._id);
-    setCsrfCookie(headers, nextContext.session.csrfToken);
+    addSessionCookies(headers, nextContext);
     if (user.role === "ADMIN") {
       if (user.mfaEnabledAt && user.mfaTotpSecretEncrypted) {
         return json({ requiresMfa: true }, 200, headers);
@@ -114,9 +114,7 @@ export async function authEndpoint(request: Request, path: string): Promise<Resp
     const context = await loadSession(request);
     requireCsrf(request, context);
     if (!context?.user) throw new HttpError(401, "Inicia sesión para continuar.");
-    const { collections } = await getStore();
-    await collections.sessions.deleteOne({ _id: context.session._id });
-    await logAudit(context.user.email, "account.signed_out", context.user.email);
+    await logoutIdentitySession(context);
     const headers = new Headers();
     clearAuthCookies(headers);
     return empty(204, headers);

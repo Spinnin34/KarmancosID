@@ -165,6 +165,23 @@ export async function signIdToken(user: IdentityUser, client: OAuthClient, scope
     .sign(key);
 }
 
+export async function signBackchannelLogoutToken(user: IdentityUser, client: OAuthClient, now = new Date()) {
+  const jwk = await signingJwks();
+  const key = await getPrivateKey();
+  const timestamp = Math.floor(now.getTime() / 1000);
+  return new SignJWT({
+    sub: await pairwiseSubject(user, client),
+    events: { "http://schemas.openid.net/event/backchannel-logout": {} },
+  })
+    .setProtectedHeader({ alg: "RS256", kid: jwk.kid, typ: "logout+jwt" })
+    .setIssuer(getIssuer())
+    .setAudience(client.clientId)
+    .setIssuedAt(timestamp)
+    .setExpirationTime(timestamp + 120)
+    .setJti(randomToken(16))
+    .sign(key);
+}
+
 export async function verifyAccessToken(token: string) {
   return jwtVerify(token, await getPublicKey(), { issuer: getIssuer(), algorithms: ["RS256"] });
 }

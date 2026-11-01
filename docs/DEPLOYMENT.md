@@ -38,6 +38,8 @@ La guía de [regiones de funciones de Vercel](https://vercel.com/docs/functions/
 
 No existe configuración de SMTP, envío de correo ni verificación por email. No añadas `.env`, claves PEM, contraseñas ni URI privadas al repositorio.
 
+Para cerrar sesiones de aplicaciones conectadas al salir de Karmancos ID, registra un `backchannel_logout_uri` HTTPS exacto en cada cliente. Ese endpoint debe aceptar un `logout_token` firmado como formulario URL-encoded, validar issuer, audience, firma, expiración, `jti` y el evento `http://schemas.openid.net/event/backchannel-logout`, y eliminar la sesión local asociada al `sub` pairwise. El proveedor también revoca los tokens OIDC emitidos al usuario. Sin un endpoint implementado por la aplicación, el proveedor no puede borrar su cookie o sesión local.
+
 ## Generar secretos
 
 En PowerShell, genera una clave RSA y convierte cada PEM a Base64 en tu equipo. Mantén la salida en un gestor seguro y cópiala directamente a Vercel; no la incluyas en incidencias ni logs.
