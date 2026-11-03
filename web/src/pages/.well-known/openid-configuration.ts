@@ -22,6 +22,17 @@ const metadata = {
   subject_types_supported: ["pairwise"],
   id_token_signing_alg_values_supported: ["RS256"],
   scopes_supported: ["openid", "profile", "email"],
+  claims_supported: [
+    "sub",
+    "name",
+    "preferred_username",
+    "given_name",
+    "family_name",
+    "picture",
+    "role",
+    "email",
+    "email_verified",
+  ],
 };
 
 export function GET() {

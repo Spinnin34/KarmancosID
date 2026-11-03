@@ -41,6 +41,8 @@ Si una persona pierde acceso, la administración verifica su identidad fuera del
 
 El proveedor expone Authorization Code, PKCE S256, callbacks exactos, `state`, `nonce`, scopes y subjects pairwise. Los clientes públicos no usan secreto ni reciben refresh token. Los clientes confidenciales deben proteger el secreto en su servidor. El SDK comprueba firma y claims del ID token antes de devolver la identidad.
 
+Con el scope `profile`, los tokens OIDC y UserInfo incluyen `role: "ADMIN"` para cuentas administradoras; las demás cuentas no reciben ese claim. Karmancos ID exige MFA a las cuentas administradoras antes de autorizar el cliente. Los cambios de rol revocan el acceso OIDC y notifican a los clientes que registraron el cierre de sesión back-channel.
+
 Los identificadores `sub` no contienen el correo y dependen del HMAC estable. Mantén el issuer, las claves de firma y el HMAC al migrar; cualquier rotación debe planear la continuidad de identidades y tokens.
 
 ## Operación

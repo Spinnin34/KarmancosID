@@ -162,6 +162,7 @@ export async function signIdToken(user: IdentityUser, client: OAuthClient, scope
     claims.preferred_username = user.username;
     claims.given_name = user.firstName;
     claims.family_name = [user.lastName, user.secondLastName].filter(Boolean).join(" ");
+    if (user.role === "ADMIN") claims.role = "ADMIN";
     if (user.profilePicture && user.profilePictureContentType && user.profilePictureUpdatedAt) {
       const pictureUrl = new URL(
         `/api/public/users/${encodeURIComponent(user._id)}/picture?v=${new Date(user.profilePictureUpdatedAt).getTime()}`,

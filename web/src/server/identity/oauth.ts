@@ -274,6 +274,7 @@ async function userinfo(request: Request) {
       claims.preferred_username = user.username;
       claims.given_name = user.firstName;
       claims.family_name = [user.lastName, user.secondLastName].filter(Boolean).join(" ");
+      if (user.role === "ADMIN") claims.role = "ADMIN";
       if (pictureUrl(user)) claims.picture = `${getIssuer()}${pictureUrl(user)}`;
     }
     if (scopes.includes("email")) {
